@@ -394,26 +394,20 @@ app.post('/api/profile/edit', (req, res) => {
   res.json(user);
 });
 
-// AI Screenshot Scan endpoint using Gemini
+// AI Screenshot Scan endpoint using Gemini (FIXED + OPTIMIZED)
 app.post('/api/raids/scan-screenshot', async (req, res) => {
   const { base64, mimeType } = req.body;
+
   if (!base64) {
     return res.status(400).json({ error: 'No image data was provided.' });
   }
 
-  // Fallback prediction data if no API Key or model scan fails
-  const mockDetections = [
-    { pokemonName: 'Groudon', level: 5, cp: 54411, gymName: 'Water Fountain Monument' },
-    { pokemonName: 'Kyogre', level: 5, cp: 54411, gymName: 'Riverside Park Gym' },
-    { pokemonName: 'Rayquaza', level: 6, cp: 57218, gymName: 'Downtown Portal Gym' },
-    { pokemonName: 'Mewtwo', level: 5, cp: 54148, gymName: 'Memorial Obelisk' },
-    { pokemonName: 'Charizard', level: 6, cp: 48500, gymName: 'City Central Park Clock' }
-  ];
-  const fallbackData = mockDetections[Math.floor(Math.random() * mockDetections.length)];
-
   if (!process.env.GEMINI_API_KEY) {
-    console.warn('GEMINI_API_KEY not found in environment. Providing standard simulated fallback detection.');
-    return res.json({ success: true, data: fallbackData, isMock: true });
+    console.warn('Missing GEMINI_API_KEY');
+    return res.status(422).json({
+      success: false,
+      error: 'Gemini API key missing - cannot scan screenshot'
+    });
   }
 
   try {
@@ -421,63 +415,126 @@ app.post('/api/raids/scan-screenshot', async (req, res) => {
       apiKey: process.env.GEMINI_API_KEY,
       httpOptions: {
         headers: {
-          'User-Agent': 'aistudio-build',
+          'User-Agent': 'pokemon-go-raid-scanner'
         }
       }
     });
 
+    // Clean base64 input
     let cleanBase64 = base64;
     if (base64.startsWith('data:')) {
-      const commaIdx = base64.indexOf(',');
-      if (commaIdx !== -1) {
-        cleanBase64 = base64.substring(commaIdx + 1);
-      }
+      const idx = base64.indexOf(',');
+      cleanBase64 = base64.slice(idx + 1);
     }
 
     const imagePart = {
       inlineData: {
         mimeType: mimeType || 'image/png',
-        data: cleanBase64,
-      },
+        data: cleanBase64
+      }
     };
 
+    // 🔥 SUPER OPTIMIZED PROMPT (OCR + Vision hybrid)
     const textPart = {
-      text: `Identify the following Pokemon GO Raid screenshot details. Return a JSON object with:
-- "pokemonName": the Name of the Raid Boss (e.g., Groudon, Kyogre, Mewtwo, Rayquaza, Xerneas, Kartana, Charizard, etc.)
-- "level": the Raid star Tier level (e.g. 1, 3, 5, or 6. Legendary/Primal raids are 5, Mega are 6). Output a single number integer or 5 if unsure.
-- "cp": the Raid Boss combat power (integer, e.g. 54411) if shown, otherwise null
-- "gymName": the Name of the Gym if visible, otherwise guess a clean name or leave blank
-Ensure the output is pure JSON.`,
+      text: `
+You are a HIGH PRECISION Pokémon GO raid screenshot parser.
+
+CRITICAL RULES:
+- NEVER guess values
+- OCR values (CP, timer) are MORE reliable than vision guesses
+- If unclear → return null
+- Output MUST be valid JSON only
+
+You MUST extract:
+
+{
+  "pokemonName": string | null,
+  "level": number | null,
+  "cp": number | null,
+  "gymName": string | null,
+  "timeText": string | null,
+  "remainingMinutes": number | null,
+  "isMega": boolean,
+  "isPrimal": boolean,
+  "confidence": number
+}
+
+PARSING RULES:
+
+1. TIMER:
+- "0:32:58" → remainingMinutes = 32
+- "42:58" → remainingMinutes = 42
+
+2. CP:
+- Must be numeric only
+- If unreadable → null
+
+3. POKEMON:
+- Identify raid boss from center focus
+
+4. CONFIDENCE:
+- 0 to 1 based on clarity of image
+
+5. SAFETY:
+- Do NOT invent gym names
+- Do NOT hallucinate Pokémon
+
+EXAMPLE OUTPUT:
+{
+  "pokemonName": "Dialga",
+  "level": 5,
+  "cp": 53394,
+  "gymName": "Jamia Mosque",
+  "timeText": "0:32:58",
+  "remainingMinutes": 32,
+  "isMega": false,
+  "isPrimal": false,
+  "confidence": 0.96
+}
+`
     };
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: { parts: [imagePart, textPart] },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            pokemonName: { type: Type.STRING },
-            level: { type: Type.INTEGER },
-            cp: { type: Type.INTEGER, nullable: true },
-            gymName: { type: Type.STRING }
-          },
-          required: ["pokemonName", "level", "gymName"]
+    // 🔥 CORRECT GEMINI CALL (FIXED SDK USAGE)
+    const result = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [textPart, imagePart]
         }
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: 'application/json'
       }
     });
 
-    const parsed = JSON.parse(response.text || '{}');
-    console.log('Gemini Raid Scan success:', parsed);
-    return res.json({ success: true, data: parsed });
+    const text = result.text;
 
-  } catch (err: any) {
-    console.error('Gemini Raid screenshot scanning failed:', err);
-    return res.json({ success: true, data: fallbackData, isMock: true, errorMsg: err.message });
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      return res.status(500).json({
+        success: false,
+        error: 'Model returned invalid JSON',
+        raw: text
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: parsed
+    });
+
+  } catch (error: any) {
+    console.error('Scan error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || 'Unknown error'
+    });
   }
 });
-
 /* ==========================================================================
    RAIDS ENDPOINTS
    ========================================================================== */
