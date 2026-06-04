@@ -403,30 +403,25 @@ app.post('/api/raids/scan-screenshot', async (req, res) => {
   const { base64, mimeType } = req.body;
 
   if (!base64) {
-    return res.status(400).json({ error: 'No image data was provided.' });
+    return res.status(400).json({ error: "No image data provided" });
   }
 
-  // fallback ONLY if AI fails
   const fallbackData = {
     pokemonName: "Unknown",
     level: 5,
     cp: null,
-    gymName: "Unknown Gym"
+    gymName: "Unknown Gym",
+    remainingMinutes: null
   };
-
-  if (!process.env.GEMINI_API_KEY) {
-    return res.json({ success: true, data: fallbackData, isMock: true });
-  }
 
   try {
     const ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
     });
 
-    let cleanBase64 = base64;
-    if (base64.startsWith("data:")) {
-      cleanBase64 = base64.split(",")[1];
-    }
+    let cleanBase64 = base64.includes(",")
+      ? base64.split(",")[1]
+      : base64;
 
     const imagePart = {
       inlineData: {
@@ -436,23 +431,11 @@ app.post('/api/raids/scan-screenshot', async (req, res) => {
     };
 
     const textPart = {
-  text: `
-You are a Pokémon GO RAID SCREENSHOT ANALYZER.
+      text: `
+Extract Pokémon GO RAID INFO from this screenshot.
 
-IMPORTANT:
-This is NOT OCR text-only. You must interpret UI elements visually.
+Return ONLY valid JSON:
 
-TASK:
-Extract raid boss + gym + CP from Pokémon GO raid screen.
-
-RULES:
-- If Pokémon name is visible anywhere (boss image or text), identify it
-- If CP is visible, extract it
-- If gym name is partially visible, infer full name
-- NEVER return null unless truly impossible
-- DO NOT return "Unknown"
-
-OUTPUT JSON ONLY:
 {
   "pokemonName": string,
   "level": number,
@@ -460,47 +443,63 @@ OUTPUT JSON ONLY:
   "gymName": string,
   "remainingMinutes": number
 }
+
+RULES:
+- Do NOT return null
+- Do NOT return unknown
+- If unsure, make best visual guess from raid boss image + UI
+- Output ONLY JSON
 `
-};
+    };
 
     const response = await ai.models.generateContent({
       model: "gemini-1.5-pro-vision",
-      contents: { parts: [imagePart, textPart] },
-      config: {
-        responseMimeType: "application/json",
+      contents: {
+        parts: [imagePart, textPart],
       },
     });
 
-    const raw = response.text || "";
+    // ✅ IMPORTANT FIX HERE
+    const raw =
+      response.candidates?.[0]?.content?.parts?.[0]?.text ||
+      response.text ||
+      "";
 
-    console.log("RAW GEMINI RESPONSE:", raw);
+    console.log("RAW GEMINI OUTPUT:", raw);
+
+    if (!raw) {
+      return res.json({
+        success: false,
+        error: "Empty Gemini response",
+        data: fallbackData,
+      });
+    }
 
     let parsed;
-
     try {
       parsed = JSON.parse(raw);
     } catch (e) {
-      console.error("JSON PARSE FAILED:", raw);
-
+      console.log("PARSE FAILED:", raw);
       return res.json({
         success: false,
-        error: "AI returned invalid JSON",
-        raw
+        error: "Invalid JSON from AI",
+        raw,
+        data: fallbackData,
       });
     }
 
     return res.json({
       success: true,
-      data: parsed
+      data: parsed,
     });
 
   } catch (err: any) {
-    console.error("SCAN FAILED:", err);
+    console.error("SCAN ERROR:", err);
 
     return res.json({
-      success: true,
+      success: false,
+      error: err.message,
       data: fallbackData,
-      isMock: true
     });
   }
 });
