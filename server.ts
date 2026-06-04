@@ -461,47 +461,36 @@ RULES:
 
     // ✅ IMPORTANT FIX HERE
     const raw =
-      response.candidates?.[0]?.content?.parts?.[0]?.text ||
-      response.text ||
-      "";
+  response.candidates?.[0]?.content?.parts?.map(p => p.text).join('') ||
+  response.text ||
+  '';
 
-    console.log("RAW GEMINI OUTPUT:", raw);
+if (!raw) {
+  return res.json({ success: false, data: fallbackData });
+}
 
-    if (!raw) {
-      return res.json({
-        success: false,
-        error: "Empty Gemini response",
-        data: fallbackData,
-      });
-    }
+// CLEAN markdown ```json ``` if present
+const cleaned = raw
+  .replace(/```json/g, '')
+  .replace(/```/g, '')
+  .trim();
 
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (e) {
-      console.log("PARSE FAILED:", raw);
-      return res.json({
-        success: false,
-        error: "Invalid JSON from AI",
-        raw,
-        data: fallbackData,
-      });
-    }
+let parsed;
 
-    return res.json({
-      success: true,
-      data: parsed,
-    });
+try {
+  parsed = JSON.parse(cleaned);
+} catch (err) {
+  console.log("❌ Gemini RAW OUTPUT:", raw);
+  return res.json({
+    success: false,
+    data: fallbackData,
+    raw
+  });
+}
 
-  } catch (err: any) {
-    console.error("SCAN ERROR:", err);
-
-    return res.json({
-      success: false,
-      error: err.message,
-      data: fallbackData,
-    });
-  }
+return res.json({
+  success: true,
+  data: parsed
 });
 /* ==========================================================================
    RAIDS ENDPOINTS

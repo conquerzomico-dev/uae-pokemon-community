@@ -74,10 +74,10 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
           const result = await res.json();
           if (result.success && result.data) {
             const { pokemonName: dName, level: dLvl, cp: dCp, gymName: dGym } = result.data;
-            if (dName) setPokemonName(dName);
-            if (dLvl) setLevel(dLvl.toString());
-            if (dCp) setCp(dCp.toString());
-            if (dGym) setGymName(dGym);
+           if (dName && dName.trim() !== '') setPokemonName(dName);
+if (dLvl !== null && dLvl !== undefined) setLevel(String(dLvl));
+if (dCp !== null && dCp !== undefined) setCp(String(dCp));
+if (dGym && dGym.trim() !== '') setGymName(dGym);
             setAiScanNotice(`AI Successfully scanned! Auto-filled: ${dName || 'Raid Boss'}`);
           } else {
             alert('AI Scan could not extract data, please fill details manually.');
