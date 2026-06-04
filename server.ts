@@ -407,16 +407,13 @@ app.post('/api/raids/scan-screenshot', async (req, res) => {
     return res.status(400).json({ error: 'No image data was provided.' });
   }
 
-  // Fallback prediction data if no API Key or model scan fails
-  const mockDetections = [
-    { pokemonName: 'Groudon', level: 5, cp: 54411, gymName: 'Water Fountain Monument' },
-    { pokemonName: 'Kyogre', level: 5, cp: 54411, gymName: 'Riverside Park Gym' },
-    { pokemonName: 'Rayquaza', level: 6, cp: 57218, gymName: 'Downtown Portal Gym' },
-    { pokemonName: 'Mewtwo', level: 5, cp: 54148, gymName: 'Memorial Obelisk' },
-    { pokemonName: 'Charizard', level: 6, cp: 48500, gymName: 'City Central Park Clock' }
-  ];
-
-  const fallbackData = mockDetections[Math.floor(Math.random() * mockDetections.length)];
+const fallbackData = {
+  pokemonName: null,
+  level: null,
+  cp: null,
+  gymName: null,
+  error: "Could not reliably detect raid from screenshot"
+};
 
   // If no API key → return mock
   if (!process.env.GEMINI_API_KEY) {
