@@ -420,8 +420,10 @@ app.post('/api/profile/edit', (req, res) => {
 });
 
 // AI Screenshot Scan endpoint using Gemini
+// AI Screenshot Scan endpoint using Gemini
 app.post('/api/raids/scan-screenshot', async (req, res) => {
   const { base64, mimeType } = req.body;
+
   if (!base64) {
     return res.status(400).json({ error: 'No image data was provided.' });
   }
@@ -434,75 +436,100 @@ app.post('/api/raids/scan-screenshot', async (req, res) => {
     { pokemonName: 'Mewtwo', level: 5, cp: 54148, gymName: 'Memorial Obelisk' },
     { pokemonName: 'Charizard', level: 6, cp: 48500, gymName: 'City Central Park Clock' }
   ];
+
   const fallbackData = mockDetections[Math.floor(Math.random() * mockDetections.length)];
 
+  // If no API key → return mock
   if (!process.env.GEMINI_API_KEY) {
-    console.warn('GEMINI_API_KEY not found in environment. Providing standard simulated fallback detection.');
+    console.warn('GEMINI_API_KEY not found. Using fallback data.');
     return res.json({ success: true, data: fallbackData, isMock: true });
   }
 
   try {
     const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
+      apiKey: process.env.GEMINI_API_KEY
     });
 
-    let cleanBase64 = base64;
-    if (base64.startsWith('data:')) {
-      const commaIdx = base64.indexOf(',');
-      if (commaIdx !== -1) {
-        cleanBase64 = base64.substring(commaIdx + 1);
-      }
-    }
+    // Clean base64 safely
+    const cleanBase64 = base64.replace(/^data:image\/\w+;base64,/, '');
 
     const imagePart = {
       inlineData: {
         mimeType: mimeType || 'image/png',
-        data: cleanBase64,
-      },
+        data: cleanBase64
+      }
     };
 
     const textPart = {
-      text: `Identify the following Pokemon GO Raid screenshot details. Return a JSON object with:
-- "pokemonName": the Name of the Raid Boss (e.g., Groudon, Kyogre, Mewtwo, Rayquaza, Xerneas, Kartana, Charizard, etc.)
-- "level": the Raid star Tier level (e.g. 1, 3, 5, or 6. Legendary/Primal raids are 5, Mega are 6). Output a single number integer or 5 if unsure.
-- "cp": the Raid Boss combat power (integer, e.g. 54411) if shown, otherwise null
-- "gymName": the Name of the Gym if visible, otherwise guess a clean name or leave blank
-Ensure the output is pure JSON.`,
+      text: `
+You are a STRICT Pokémon GO screenshot parser.
+
+RULES:
+- Only use visible text
+- Never guess missing values
+- If not visible, return null
+- Output ONLY valid JSON
+
+FORMAT:
+{
+  "pokemonName": string | null,
+  "level": number | null,
+  "cp": number | null,
+  "gymName": string | null,
+  "timeText": string | null,
+  "remainingMinutes": number | null,
+  "isMega": boolean,
+  "isPrimal": boolean
+}
+`
     };
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: { parts: [imagePart, textPart] },
       config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            pokemonName: { type: Type.STRING },
-            level: { type: Type.INTEGER },
-            cp: { type: Type.INTEGER, nullable: true },
-            gymName: { type: Type.STRING }
-          },
-          required: ["pokemonName", "level", "gymName"]
-        }
+        temperature: 0,
+        responseMimeType: "application/json"
       }
     });
 
-    const parsed = JSON.parse(response.text || '{}');
-    console.log('Gemini Raid Scan success:', parsed);
-    return res.json({ success: true, data: parsed });
+    const result =
+      response.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+    if (!result) {
+      return res.status(500).json({ error: "Empty AI response" });
+    }
+
+    let parsed;
+
+    try {
+      parsed = JSON.parse(result);
+    } catch (err) {
+      console.log("❌ JSON PARSE FAILED:", result);
+
+      return res.status(200).json({
+        success: false,
+        error: "Invalid AI output",
+        raw: result
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: parsed
+    });
 
   } catch (err: any) {
-    console.error('Gemini Raid screenshot scanning failed:', err);
-    return res.json({ success: true, data: fallbackData, isMock: true, errorMsg: err.message });
+    console.error('Gemini scan failed:', err);
+
+    return res.json({
+      success: true,
+      data: fallbackData,
+      isMock: true,
+      errorMsg: err.message
+    });
   }
 });
-
 /* ==========================================================================
    RAIDS ENDPOINTS
    ========================================================================== */
