@@ -400,6 +400,7 @@ app.post('/api/profile/edit', (req, res) => {
 
 // AI Screenshot Scan endpoint using Gemini
 app.post('/api/raids/scan-screenshot', async (req, res) => {
+	onsole.log("🔥 scan-screenshot hit");
   const { base64, mimeType } = req.body;
 
   if (!base64) {
@@ -470,7 +471,7 @@ Return ONLY valid JSON:
   });
 }
 });
-    }
+    
 
     const cleaned = raw
       .replace(/```json/g, '')
