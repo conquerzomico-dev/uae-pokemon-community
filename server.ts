@@ -436,26 +436,35 @@ app.post('/api/raids/scan-screenshot', async (req, res) => {
     };
 
     const textPart = {
-      text: `
-You are a Pokémon GO raid screenshot extractor.
+  text: `
+You are a Pokémon GO RAID SCREENSHOT ANALYZER.
 
-Return ONLY valid JSON:
+IMPORTANT:
+This is NOT OCR text-only. You must interpret UI elements visually.
+
+TASK:
+Extract raid boss + gym + CP from Pokémon GO raid screen.
+
+RULES:
+- If Pokémon name is visible anywhere (boss image or text), identify it
+- If CP is visible, extract it
+- If gym name is partially visible, infer full name
+- NEVER return null unless truly impossible
+- DO NOT return "Unknown"
+
+OUTPUT JSON ONLY:
 {
-  "pokemonName": "string",
+  "pokemonName": string,
   "level": number,
   "cp": number,
-  "gymName": "string"
+  "gymName": string,
+  "remainingMinutes": number
 }
-
-Rules:
-- Do NOT guess
-- If unsure use "Unknown"
-- Output ONLY JSON, no text
 `
-    };
+};
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-1.5-pro-vision",
       contents: { parts: [imagePart, textPart] },
       config: {
         responseMimeType: "application/json",
