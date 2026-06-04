@@ -395,7 +395,7 @@ app.post('/api/profile/edit', (req, res) => {
 });
 
 // AI Screenshot Scan endpoint using Gemini (FIXED + OPTIMIZED)
-aapp.post("/api/raids/scan-screenshot", async (req, res) => {
+app.post("/api/raids/scan-screenshot", async (req, res) => {
   const { base64, mimeType } = req.body;
 
   if (!base64) {
@@ -411,10 +411,10 @@ aapp.post("/api/raids/scan-screenshot", async (req, res) => {
       apiKey: process.env.GEMINI_API_KEY
     });
 
+    // Clean base64 if it includes data URL prefix
     let cleanBase64 = base64;
-
-    if (base64.includes(";base64,")) {
-      cleanBase64 = base64.split(";base64,")[1];
+    if (cleanBase64.includes(";base64,")) {
+      cleanBase64 = cleanBase64.split(";base64,")[1];
     }
 
     const imagePart = {
@@ -424,64 +424,74 @@ aapp.post("/api/raids/scan-screenshot", async (req, res) => {
       }
     };
 
-    // 🔥 SIMPLE + STABLE PROMPT (LIKE YOUR OLD WORKING APP)
     const textPart = {
       text: `
 Analyze this Pokémon GO raid screenshot.
 
-Return ONLY JSON:
+Return ONLY valid JSON in this exact format:
 
 {
-  "pokemonName": string,
-  "level": number,
+  "pokemonName": string | null,
+  "level": number | null,
   "cp": number | null,
-  "gymName": string,
-  "timeText": string,
-  "remainingMinutes": number,
+  "gymName": string | null,
+  "timeText": string | null,
+  "remainingMinutes": number | null,
   "isMega": boolean,
   "isPrimal": boolean
 }
 
-Rules:
-- NEVER guess unknown values
-- CP must be number only
-- Timer "0:32:58" → 32 minutes
-- Return valid JSON only
+RULES:
+- NEVER guess values
+- Use null if unclear
+- CP must be numeric only
+- Timer conversion:
+  "0:32:58" → 32
+  "42:58" → 42
+- Output must be STRICT JSON only
 `
     };
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",   // ✅ FIXED (REAL MODEL)
+      model: "gemini-1.5-flash",
       contents: {
         parts: [imagePart, textPart]
       }
     });
 
-    const text = response.text || "";
+    // SAFE extraction (prevents random crashes)
+    const text =
+      response.text ||
+      response.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "";
+
+    if (!text) {
+      return res.status(500).json({
+        error: "Empty response from AI"
+      });
+    }
 
     let parsed;
     try {
-      parsed = JSON.parse(text);
-    } catch {
+      parsed = JSON.parse(text.trim());
+    } catch (err) {
       return res.status(500).json({
-        error: "Invalid JSON from AI",
+        error: "Invalid JSON returned from AI",
         raw: text
       });
     }
 
     return res.json(parsed);
 
-  } catch (err) {
+  } catch (err: any) {
     console.error("SCAN ERROR:", err);
+
     return res.status(500).json({
       error: "AI scan failed",
-      details: err.message
+      details: err?.message || "Unknown error"
     });
   }
 });
-/* ==========================================================================
-   RAIDS ENDPOINTS
-   ========================================================================== */
 
 // Get Active raids
 app.get('/api/raids', (req, res) => {
