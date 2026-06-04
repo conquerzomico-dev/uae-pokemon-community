@@ -394,24 +394,28 @@ app.post('/api/profile/edit', (req, res) => {
   res.json(user);
 });
 
-// AI Screenshot Scan endpoint using Gemini (FIXED + OPTIMIZED)
 app.post("/api/raids/scan-screenshot", async (req, res) => {
-  const { base64, mimeType } = req.body;
-
-  if (!base64) {
-    return res.status(400).json({ error: "No image provided" });
-  }
-
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(422).json({ error: "Missing Gemini API key" });
-  }
+  console.log("📸 SCAN REQUEST RECEIVED");
 
   try {
+    const { base64, mimeType } = req.body;
+
+    if (!base64) {
+      console.log("❌ Missing base64");
+      return res.status(400).json({ error: "No image provided" });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      console.log("❌ Missing API key");
+      return res.status(422).json({ error: "Missing Gemini API key" });
+    }
+
+    console.log("✅ Creating Gemini client");
+
     const ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY
     });
 
-    // Clean base64 if it includes data URL prefix
     let cleanBase64 = base64;
     if (cleanBase64.includes(";base64,")) {
       cleanBase64 = cleanBase64.split(";base64,")[1];
@@ -426,13 +430,12 @@ app.post("/api/raids/scan-screenshot", async (req, res) => {
 
     const textPart = {
       text: `
-Analyze this Pokémon GO raid screenshot.
+Extract Pokémon GO raid info.
 
-Return ONLY valid JSON in this exact format:
-
+Return ONLY JSON:
 {
-  "pokemonName": string | null,
-  "level": number | null,
+  "pokemonName": string,
+  "level": number,
   "cp": number | null,
   "gymName": string | null,
   "timeText": string | null,
@@ -440,17 +443,10 @@ Return ONLY valid JSON in this exact format:
   "isMega": boolean,
   "isPrimal": boolean
 }
-
-RULES:
-- NEVER guess values
-- Use null if unclear
-- CP must be numeric only
-- Timer conversion:
-  "0:32:58" → 32
-  "42:58" → 42
-- Output must be STRICT JSON only
 `
     };
+
+    console.log("🚀 Calling Gemini...");
 
     const response = await ai.models.generateContent({
       model: "gemini-1.5-flash",
@@ -459,36 +455,30 @@ RULES:
       }
     });
 
-    // SAFE extraction (prevents random crashes)
+    console.log("📩 Gemini response received");
+
     const text =
       response.text ||
-      response.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "";
+      response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    console.log("🧾 RAW TEXT:", text);
 
     if (!text) {
-      return res.status(500).json({
-        error: "Empty response from AI"
-      });
+      return res.status(500).json({ error: "Empty AI response" });
     }
 
-    let parsed;
-    try {
-      parsed = JSON.parse(text.trim());
-    } catch (err) {
-      return res.status(500).json({
-        error: "Invalid JSON returned from AI",
-        raw: text
-      });
-    }
+    const parsed = JSON.parse(text.trim());
+
+    console.log("✅ PARSED SUCCESS");
 
     return res.json(parsed);
 
-  } catch (err: any) {
-    console.error("SCAN ERROR:", err);
+  } catch (err) {
+    console.error("🔥 SCAN CRASH:", err);
 
     return res.status(500).json({
-      error: "AI scan failed",
-      details: err?.message || "Unknown error"
+      error: "Scan failed",
+      details: err.message
     });
   }
 });
