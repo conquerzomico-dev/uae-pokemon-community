@@ -457,7 +457,19 @@ Return ONLY valid JSON:
       '';
 
     if (!raw) {
-      return res.json({ success: false, data: fallbackData });
+     return res.json({
+  success: true,
+  data: parsed
+});
+} catch (err) {
+  console.log("❌ Gemini RAW OUTPUT:", raw);
+  return res.json({
+    success: false,
+    data: fallbackData,
+    raw
+  });
+}
+});
     }
 
     const cleaned = raw
@@ -467,32 +479,38 @@ Return ONLY valid JSON:
 
     let parsed;
 
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (err) {
-      console.log("❌ Gemini RAW OUTPUT:", raw);
-      return res.json({
-        success: false,
-        data: fallbackData,
-        raw
-      });
-    }
-
+try {
+  if (!raw) {
     return res.json({
-      success: true,
-      data: parsed
-    });
-
-  } catch (err) {
-    console.error("Scan error:", err);
-    return res.status(500).json({
       success: false,
       data: fallbackData
     });
   }
-});
+
+  const cleaned = raw
+    .replace(/```json/g, '')
+    .replace(/```/g, '')
+    .trim();
+
+  parsed = JSON.parse(cleaned);
+
+  return res.json({
+    success: true,
+    data: parsed
+  });
+
+} catch (err) {
+  console.log("❌ Gemini RAW OUTPUT:", raw);
+
+  return res.json({
+    success: false,
+    data: fallbackData,
+    raw
+  });
+}
 /* ==========================================================================
    RAIDS ENDPOINTS
+   onsole.log("🔥 scan-screenshot hit");
    ========================================================================== */
 
 // Get Active raids
