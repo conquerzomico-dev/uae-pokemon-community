@@ -28,9 +28,9 @@ let state: AppState = {
 
 // Seed moderator and default admin/trader accounts for richer initial demo if needed
 const seedState = () => {
-  // Always make sure the moderator exists or can be authenticated
   const modEmail = 'ahmedfoox21@gmail.com';
   const modId = 'mod_ahmed';
+
   state.users[modId] = {
     id: modId,
     email: modEmail,
@@ -42,38 +42,60 @@ const seedState = () => {
     isModerator: true,
     rating: 5.0,
     ratingCount: 1,
-    avatarUrl: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=150', // Mewtwo style avatar link
+    avatarUrl: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=150',
     onlineStatus: false,
     joinedAt: new Date().toISOString()
   };
 
-  // Add a couple of active players to make the app feel alive!
+  // ✅ ALWAYS define players INSIDE function
   const players = [
-    { id: 'player1', name: 'AshKetchum', team: 'Valor' as PokemonTeam, code: '123456789012', email: 'ash@pallet.com', role: 'Trainer' as PlayerRole, avatar: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150' },
-    { id: 'player2', name: 'MistyWater', team: 'Mystic' as PokemonTeam, code: '987654321098', email: 'misty@cerulean.com', role: 'Trader' as PlayerRole, avatar: 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=150' },
-    { id: 'player3', name: 'SparkyGamer', team: 'Instinct' as PokemonTeam, code: '555544443333', email: 'spark@yellow.com', role: 'Trainer' as PlayerRole, avatar: 'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=150' }
+    {
+      id: 'player1',
+      name: 'AshKetchum',
+      team: 'Valor',
+      code: '123456789012',
+      email: 'ash@pallet.com',
+      role: 'Trainer',
+      avatar: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150'
+    },
+    {
+      id: 'player2',
+      name: 'MistyWater',
+      team: 'Mystic',
+      code: '987654321098',
+      email: 'misty@cerulean.com',
+      role: 'Trader',
+      avatar: 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=150'
+    },
+    {
+      id: 'player3',
+      name: 'SparkyGamer',
+      team: 'Instinct',
+      code: '555544443333',
+      email: 'spark@yellow.com',
+      role: 'Trainer',
+      avatar: 'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=150'
+    }
   ];
 
-  players.forEach(p => {
-    if (!state.users[p.id]) {
-      state.users[p.id] = {
-        id: p.id,
-        email: p.email,
-        trainerName: p.name,
-        gameCode: p.code,
-        team: p.team,
-        role: p.role,
-        isAdmin: false,
-        isModerator: false,
-        rating: 4.8,
-        ratingCount: 4,
-        avatarUrl: p.avatar,
-        onlineStatus: true,
-        joinedAt: new Date().toISOString()
-      };
-    }
+  players.forEach((p) => {
+    state.users[p.id] = {
+      id: p.id,
+      email: p.email,
+      trainerName: p.name,
+      gameCode: p.code,
+      team: p.team,
+      role: p.role,
+      isAdmin: false,
+      isModerator: false,
+      rating: 4.8,
+      ratingCount: 4,
+      avatarUrl: p.avatar,
+      onlineStatus: true,
+      joinedAt: new Date().toISOString()
+    };
   });
-
+};
   // Prepopulate standard global chat messages if empty
   if (state.chatMessages.length === 0) {
     state.chatMessages.push({
