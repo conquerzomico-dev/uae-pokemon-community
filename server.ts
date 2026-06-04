@@ -401,41 +401,49 @@ app.post("/api/raids/scan-screenshot", async (req, res) => {
     const { base64, mimeType } = req.body;
 
     if (!base64) {
-      console.log("❌ Missing base64");
-      return res.status(400).json({ error: "No image provided" });
+      return res.status(400).json({
+        success: false,
+        error: "No image provided"
+      });
     }
 
     if (!process.env.GEMINI_API_KEY) {
-      console.log("❌ Missing API key");
-      return res.status(422).json({ error: "Missing Gemini API key" });
+      return res.status(422).json({
+        success: false,
+        error: "Missing Gemini API key"
+      });
     }
-
-    console.log("✅ Creating Gemini client");
 
     const ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY
     });
 
+    // ✅ clean base64 safely
     let cleanBase64 = base64;
+    let finalMime = mimeType || "image/png";
+
     if (cleanBase64.includes(";base64,")) {
-      cleanBase64 = cleanBase64.split(";base64,")[1];
+      const parts = cleanBase64.split(";base64,");
+      finalMime = parts[0].replace("data:", "") || finalMime;
+      cleanBase64 = parts[1];
     }
 
     const imagePart = {
       inlineData: {
-        mimeType: mimeType || "image/png",
+        mimeType: finalMime,
         data: cleanBase64
       }
     };
 
-    const textPart = {
+    const prompt = {
       text: `
-Extract Pokémon GO raid info.
+Analyze this Pokémon GO raid screenshot.
 
-Return ONLY JSON:
+Return ONLY valid JSON (no markdown, no text):
+
 {
   "pokemonName": string,
-  "level": number,
+  "level": number | null,
   "cp": number | null,
   "gymName": string | null,
   "timeText": string | null,
@@ -443,61 +451,76 @@ Return ONLY JSON:
   "isMega": boolean,
   "isPrimal": boolean
 }
+
+Rules:
+- Never guess missing values (use null)
+- CP must be number or null
+- Convert timer like 0:32:58 → 32
+- Output ONLY JSON
 `
     };
 
-    console.log("🚀 Calling Gemini...");
-
     const response = await ai.models.generateContent({
       model: "gemini-1.5-flash",
-      contents: {
-        parts: [imagePart, textPart]
-      }
+      contents: { parts: [imagePart, prompt] }
     });
 
-    console.log("📩 Gemini response received");
-
-    const text =
+    const raw =
       response.text ||
-      response.candidates?.[0]?.content?.parts?.[0]?.text;
+      response.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "";
 
-    console.log("🧾 RAW TEXT:", text);
+    console.log("🧾 RAW AI RESPONSE:", raw);
 
-    if (!text) {
-      return res.status(500).json({ error: "Empty AI response" });
+    if (!raw) {
+      return res.status(500).json({
+        success: false,
+        error: "Empty AI response"
+      });
     }
 
-    const parsed = JSON.parse(text.trim());
+    // ✅ safe JSON parsing (prevents crash → blank page issues)
+    let parsed;
+    try {
+      const cleaned = raw
+        .replace(/```json/g, "")
+        .replace(/```/g, "")
+        .trim();
 
-    console.log("✅ PARSED SUCCESS");
+      parsed = JSON.parse(cleaned);
+    } catch (e) {
+      console.error("❌ JSON PARSE FAILED:", raw);
 
-    return res.json(parsed);
+      return res.status(200).json({
+        success: false,
+        error: "AI returned invalid JSON",
+        fallback: {
+          pokemonName: "Unknown",
+          level: null,
+          cp: null,
+          gymName: null,
+          timeText: null,
+          remainingMinutes: null,
+          isMega: false,
+          isPrimal: false
+        }
+      });
+    }
 
-  } catch (err) {
+    return res.json({
+      success: true,
+      data: parsed
+    });
+
+  } catch (err: any) {
     console.error("🔥 SCAN CRASH:", err);
 
     return res.status(500).json({
+      success: false,
       error: "Scan failed",
-      details: err.message
+      details: err?.message || "Unknown error"
     });
   }
-});
-
-// Get Active raids
-app.get('/api/raids', (req, res) => {
-  // Update expired status for active gyms before listing
-  const now = new Date();
-  let changed = false;
-  Object.values(state.raids).forEach(raid => {
-    if (raid.status === 'active' && new Date(raid.endTime) < now) {
-      raid.status = 'expired';
-      changed = true;
-    }
-  });
-
-  if (changed) saveState();
-
-  res.json(Object.values(state.raids));
 });
 
 // Host Raid
