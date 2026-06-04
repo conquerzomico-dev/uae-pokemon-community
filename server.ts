@@ -47,9 +47,9 @@ const seedState = () => {
     joinedAt: new Date().toISOString()
   };
 
-  // ❌ NO TEST USERS ANYMORE
-  // App will start empty for normal users
-};
+  // NO TEST USERS
+
+}; // 👈 MUST EXIST
 
 // Prepopulate standard global chat messages if empty
 const seedChat = () => {
