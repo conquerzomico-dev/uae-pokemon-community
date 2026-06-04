@@ -399,7 +399,6 @@ app.post('/api/profile/edit', (req, res) => {
 });
 
 // AI Screenshot Scan endpoint using Gemini
-// AI Screenshot Scan endpoint using Gemini
 app.post('/api/raids/scan-screenshot', async (req, res) => {
   const { base64, mimeType } = req.body;
 
@@ -407,56 +406,51 @@ app.post('/api/raids/scan-screenshot', async (req, res) => {
     return res.status(400).json({ error: 'No image data was provided.' });
   }
 
-const fallbackData = {
-  pokemonName: null,
-  level: null,
-  cp: null,
-  gymName: null,
-  error: "Could not reliably detect raid from screenshot"
-};
+  // fallback ONLY if AI fails
+  const fallbackData = {
+    pokemonName: "Unknown",
+    level: 5,
+    cp: null,
+    gymName: "Unknown Gym"
+  };
 
-  // If no API key → return mock
   if (!process.env.GEMINI_API_KEY) {
-    console.warn('GEMINI_API_KEY not found. Using fallback data.');
     return res.json({ success: true, data: fallbackData, isMock: true });
   }
 
   try {
     const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY
+      apiKey: process.env.GEMINI_API_KEY,
     });
 
-    // Clean base64 safely
-    const cleanBase64 = base64.replace(/^data:image\/\w+;base64,/, '');
+    let cleanBase64 = base64;
+    if (base64.startsWith("data:")) {
+      cleanBase64 = base64.split(",")[1];
+    }
 
     const imagePart = {
       inlineData: {
-        mimeType: mimeType || 'image/png',
-        data: cleanBase64
-      }
+        mimeType: mimeType || "image/png",
+        data: cleanBase64,
+      },
     };
 
     const textPart = {
       text: `
-You are a STRICT Pokémon GO screenshot parser.
+You are a Pokémon GO raid screenshot extractor.
 
-RULES:
-- Only use visible text
-- Never guess missing values
-- If not visible, return null
-- Output ONLY valid JSON
-
-FORMAT:
+Return ONLY valid JSON:
 {
-  "pokemonName": string | null,
-  "level": number | null,
-  "cp": number | null,
-  "gymName": string | null,
-  "timeText": string | null,
-  "remainingMinutes": number | null,
-  "isMega": boolean,
-  "isPrimal": boolean
+  "pokemonName": "string",
+  "level": number,
+  "cp": number,
+  "gymName": "string"
 }
+
+Rules:
+- Do NOT guess
+- If unsure use "Unknown"
+- Output ONLY JSON, no text
 `
     };
 
@@ -464,29 +458,25 @@ FORMAT:
       model: "gemini-1.5-flash",
       contents: { parts: [imagePart, textPart] },
       config: {
-        temperature: 0,
-        responseMimeType: "application/json"
-      }
+        responseMimeType: "application/json",
+      },
     });
 
-    const result =
-      response.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    const raw = response.text || "";
 
-    if (!result) {
-      return res.status(500).json({ error: "Empty AI response" });
-    }
+    console.log("RAW GEMINI RESPONSE:", raw);
 
     let parsed;
 
     try {
-      parsed = JSON.parse(result);
-    } catch (err) {
-      console.log("❌ JSON PARSE FAILED:", result);
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      console.error("JSON PARSE FAILED:", raw);
 
-      return res.status(200).json({
+      return res.json({
         success: false,
-        error: "Invalid AI output",
-        raw: result
+        error: "AI returned invalid JSON",
+        raw
       });
     }
 
@@ -496,13 +486,12 @@ FORMAT:
     });
 
   } catch (err: any) {
-    console.error('Gemini scan failed:', err);
+    console.error("SCAN FAILED:", err);
 
     return res.json({
       success: true,
       data: fallbackData,
-      isMock: true,
-      errorMsg: err.message
+      isMock: true
     });
   }
 });
