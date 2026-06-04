@@ -401,49 +401,39 @@ app.post("/api/raids/scan-screenshot", async (req, res) => {
     const { base64, mimeType } = req.body;
 
     if (!base64) {
-      return res.status(400).json({
-        success: false,
-        error: "No image provided"
-      });
+      return res.status(400).json({ error: "No image provided" });
     }
 
     if (!process.env.GEMINI_API_KEY) {
-      return res.status(422).json({
-        success: false,
-        error: "Missing Gemini API key"
-      });
+      return res.status(422).json({ error: "Missing Gemini API key" });
     }
 
     const ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY
     });
 
-    // ✅ clean base64 safely
     let cleanBase64 = base64;
-    let finalMime = mimeType || "image/png";
 
     if (cleanBase64.includes(";base64,")) {
-      const parts = cleanBase64.split(";base64,");
-      finalMime = parts[0].replace("data:", "") || finalMime;
-      cleanBase64 = parts[1];
+      cleanBase64 = cleanBase64.split(";base64,")[1];
     }
 
     const imagePart = {
       inlineData: {
-        mimeType: finalMime,
+        mimeType: mimeType || "image/png",
         data: cleanBase64
       }
     };
 
-    const prompt = {
+    const textPart = {
       text: `
-Analyze this Pokémon GO raid screenshot.
+Extract Pokémon GO raid info from this screenshot.
 
-Return ONLY valid JSON (no markdown, no text):
+Return ONLY valid JSON (no markdown, no explanation):
 
 {
   "pokemonName": string,
-  "level": number | null,
+  "level": number,
   "cp": number | null,
   "gymName": string | null,
   "timeText": string | null,
@@ -453,72 +443,42 @@ Return ONLY valid JSON (no markdown, no text):
 }
 
 Rules:
-- Never guess missing values (use null)
-- CP must be number or null
-- Convert timer like 0:32:58 → 32
-- Output ONLY JSON
+- NEVER guess missing values
+- CP must be number only
+- Convert timer "0:32:58" → 32
+- If unknown, return null
 `
     };
 
     const response = await ai.models.generateContent({
       model: "gemini-1.5-flash",
-      contents: { parts: [imagePart, prompt] }
+      contents: { parts: [imagePart, textPart] }
     });
 
-    const raw =
-      response.text ||
-      response.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "";
+    const text = response.text || "";
 
-    console.log("🧾 RAW AI RESPONSE:", raw);
+    console.log("RAW GEMINI OUTPUT:", text);
 
-    if (!raw) {
-      return res.status(500).json({
-        success: false,
-        error: "Empty AI response"
-      });
-    }
-
-    // ✅ safe JSON parsing (prevents crash → blank page issues)
+    // SAFE JSON PARSE (prevents blank page crash)
     let parsed;
     try {
-      const cleaned = raw
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
-
-      parsed = JSON.parse(cleaned);
-    } catch (e) {
-      console.error("❌ JSON PARSE FAILED:", raw);
-
+      parsed = JSON.parse(text.trim());
+    } catch (err) {
+      console.log("❌ JSON PARSE FAILED");
       return res.status(200).json({
-        success: false,
         error: "AI returned invalid JSON",
-        fallback: {
-          pokemonName: "Unknown",
-          level: null,
-          cp: null,
-          gymName: null,
-          timeText: null,
-          remainingMinutes: null,
-          isMega: false,
-          isPrimal: false
-        }
+        raw: text
       });
     }
 
-    return res.json({
-      success: true,
-      data: parsed
-    });
+    return res.json(parsed);
 
   } catch (err: any) {
-    console.error("🔥 SCAN CRASH:", err);
+    console.error("🔥 SCAN ERROR:", err);
 
     return res.status(500).json({
-      success: false,
-      error: "Scan failed",
-      details: err?.message || "Unknown error"
+      error: "AI scan failed",
+      details: err.message
     });
   }
 });
