@@ -47,12 +47,7 @@ const seedState = () => {
     joinedAt: new Date().toISOString()
   };
 
-  // Add a couple of active players to make the app feel alive!
-  const players = [
-    { id: 'player1', name: 'AshKetchum', team: 'Valor' as PokemonTeam, code: '123456789012', email: 'ash@pallet.com', role: 'Trainer' as PlayerRole, avatar: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150' },
-    { id: 'player2', name: 'MistyWater', team: 'Mystic' as PokemonTeam, code: '987654321098', email: 'misty@cerulean.com', role: 'Trader' as PlayerRole, avatar: 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=150' },
-    { id: 'player3', name: 'SparkyGamer', team: 'Instinct' as PokemonTeam, code: '555544443333', email: 'spark@yellow.com', role: 'Trainer' as PlayerRole, avatar: 'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=150' }
-  ];
+  
 
   players.forEach(p => {
     if (!state.users[p.id]) {
