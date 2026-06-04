@@ -5,8 +5,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Image as ImageIcon, MessageCircle, User as UserIcon, ShieldAlert } from 'lucide-react';
-import { User, PrivateMessage } from './types';
-import { TEAM_DETAILS } from './utils';
+import { User, PrivateMessage } from '../types';
+import { TEAM_DETAILS } from '../utils';
 
 interface PrivateMessagesProps {
   currentUser: User;
