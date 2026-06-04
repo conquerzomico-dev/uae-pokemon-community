@@ -281,53 +281,51 @@ const handleDeleteUser = async (targetUser: User) => {
                             Send PM
                           </button>
 
-                          {/* MODERATOR ASSIGNED FUNCTIONALITY */}
-                          {currentUser.isModerator && (
-                            <div className="border-t border-stone-100 dark:border-stone-805 my-1.5 pt-1.5 px-3">
-                              <p className="text-[9px] text-stone-400 font-bold uppercase tracking-wider mb-1">Moderator Power</p>
-                              
-                                <button
-    onClick={() => handleToggleAdminRole(member, false)}
-    disabled={loading}
-    className="w-full text-left py-1 text-rose-500 hover:underline leading-none flex items-center gap-1 cursor-pointer font-semibold"
-  >
-    <UserMinus className="h-3.5 w-3.5" />
-    Remove Admin Role
-  </button>
-) : (
-  <button
-    onClick={() => handleToggleAdminRole(member, true)}
-    disabled={loading}
-    className="w-full text-left py-1 text-green-600 hover:underline leading-none flex items-center gap-1 cursor-pointer font-semibold"
-  >
-    <UserPlus className="h-3.5 w-3.5" />
-    Give Admin Role
-  </button>
+
+{/* MODERATOR ASSIGNED FUNCTIONALITY */}
+{currentUser.isModerator && (
+  <>
+    {member.isAdmin ? (
+      <button
+        onClick={() => handleToggleAdminRole(member, false)}
+        disabled={loading}
+        className="w-full text-left py-1 text-rose-500 hover:underline leading-none flex items-center gap-1 cursor-pointer font-semibold"
+      >
+        <UserMinus className="h-3.5 w-3.5" />
+        Remove Admin Role
+      </button>
+    ) : (
+      <button
+        onClick={() => handleToggleAdminRole(member, true)}
+        disabled={loading}
+        className="w-full text-left py-1 text-emerald-500 hover:underline leading-none flex items-center gap-1 cursor-pointer font-semibold"
+      >
+        <UserPlus className="h-3.5 w-3.5" />
+        Give Admin Role
+      </button>
+    )}
+
+    <button
+      onClick={() => handleDeleteUser(member)}
+      disabled={loading}
+      className="w-full text-left py-1 text-red-600 hover:underline leading-none flex items-center gap-1 cursor-pointer font-semibold mt-2"
+    >
+      🗑 Delete User
+    </button>
+  </>
 )}
 
-<button
-  onClick={() => handleDeleteUser(member)}
-  disabled={loading}
-  className="w-full text-left py-1 text-red-600 hover:underline leading-none flex items-center gap-1 cursor-pointer font-semibold mt-2"
->
-  🗑 Delete User
-</button>
-                              )}
-                            </div>
-                          )}
-
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
-                </div>
-              );
-            })}
-          </div>
-        )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          );
+        })}
       </div>
+    )}
+  </div>
+</div>
 
-    </div>
-  );
+);
 }
