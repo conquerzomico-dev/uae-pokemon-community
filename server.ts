@@ -395,143 +395,87 @@ app.post('/api/profile/edit', (req, res) => {
 });
 
 // AI Screenshot Scan endpoint using Gemini (FIXED + OPTIMIZED)
-app.post('/api/raids/scan-screenshot', async (req, res) => {
+aapp.post("/api/raids/scan-screenshot", async (req, res) => {
   const { base64, mimeType } = req.body;
 
   if (!base64) {
-    return res.status(400).json({ error: 'No image data was provided.' });
+    return res.status(400).json({ error: "No image provided" });
   }
 
   if (!process.env.GEMINI_API_KEY) {
-    console.warn('Missing GEMINI_API_KEY');
-    return res.status(422).json({
-      success: false,
-      error: 'Gemini API key missing - cannot scan screenshot'
-    });
+    return res.status(422).json({ error: "Missing Gemini API key" });
   }
 
   try {
     const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'pokemon-go-raid-scanner'
-        }
-      }
+      apiKey: process.env.GEMINI_API_KEY
     });
 
-    // Clean base64 input
     let cleanBase64 = base64;
-    if (base64.startsWith('data:')) {
-      const idx = base64.indexOf(',');
-      cleanBase64 = base64.slice(idx + 1);
+
+    if (base64.includes(";base64,")) {
+      cleanBase64 = base64.split(";base64,")[1];
     }
 
     const imagePart = {
       inlineData: {
-        mimeType: mimeType || 'image/png',
+        mimeType: mimeType || "image/png",
         data: cleanBase64
       }
     };
 
-    // 🔥 SUPER OPTIMIZED PROMPT (OCR + Vision hybrid)
+    // 🔥 SIMPLE + STABLE PROMPT (LIKE YOUR OLD WORKING APP)
     const textPart = {
       text: `
-You are a HIGH PRECISION Pokémon GO raid screenshot parser.
+Analyze this Pokémon GO raid screenshot.
 
-CRITICAL RULES:
-- NEVER guess values
-- OCR values (CP, timer) are MORE reliable than vision guesses
-- If unclear → return null
-- Output MUST be valid JSON only
-
-You MUST extract:
+Return ONLY JSON:
 
 {
-  "pokemonName": string | null,
-  "level": number | null,
+  "pokemonName": string,
+  "level": number,
   "cp": number | null,
-  "gymName": string | null,
-  "timeText": string | null,
-  "remainingMinutes": number | null,
+  "gymName": string,
+  "timeText": string,
+  "remainingMinutes": number,
   "isMega": boolean,
-  "isPrimal": boolean,
-  "confidence": number
+  "isPrimal": boolean
 }
 
-PARSING RULES:
-
-1. TIMER:
-- "0:32:58" → remainingMinutes = 32
-- "42:58" → remainingMinutes = 42
-
-2. CP:
-- Must be numeric only
-- If unreadable → null
-
-3. POKEMON:
-- Identify raid boss from center focus
-
-4. CONFIDENCE:
-- 0 to 1 based on clarity of image
-
-5. SAFETY:
-- Do NOT invent gym names
-- Do NOT hallucinate Pokémon
-
-EXAMPLE OUTPUT:
-{
-  "pokemonName": "Dialga",
-  "level": 5,
-  "cp": 53394,
-  "gymName": "Jamia Mosque",
-  "timeText": "0:32:58",
-  "remainingMinutes": 32,
-  "isMega": false,
-  "isPrimal": false,
-  "confidence": 0.96
-}
+Rules:
+- NEVER guess unknown values
+- CP must be number only
+- Timer "0:32:58" → 32 minutes
+- Return valid JSON only
 `
     };
 
-    // 🔥 CORRECT GEMINI CALL (FIXED SDK USAGE)
-    const result = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: [
-        {
-          role: 'user',
-          parts: [textPart, imagePart]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: 'application/json'
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",   // ✅ FIXED (REAL MODEL)
+      contents: {
+        parts: [imagePart, textPart]
       }
     });
 
-    const text = result.text;
+    const text = response.text || "";
 
     let parsed;
     try {
       parsed = JSON.parse(text);
-    } catch (e) {
+    } catch {
       return res.status(500).json({
-        success: false,
-        error: 'Model returned invalid JSON',
+        error: "Invalid JSON from AI",
         raw: text
       });
     }
 
-    return res.json({
-      success: true,
-      data: parsed
-    });
+    return res.json(parsed);
 
-  } catch (error: any) {
-    console.error('Scan error:', error);
+  } catch (err) {
+    console.error("SCAN ERROR:", err);
     return res.status(500).json({
-      success: false,
-      error: error?.message || 'Unknown error'
+      error: "AI scan failed",
+      details: err.message
     });
   }
 });
