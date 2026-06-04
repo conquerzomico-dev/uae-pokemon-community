@@ -50,26 +50,29 @@ const seedState = () => {
   // ❌ NO TEST USERS ANYMORE
   // App will start empty for normal users
 };
-  // Prepopulate standard global chat messages if empty
+
+// Prepopulate standard global chat messages if empty
+const seedChat = () => {
   if (state.chatMessages.length === 0) {
     state.chatMessages.push({
       id: 'welcome_1',
       roomId: 'general',
-      senderId: 'player2',
-      senderName: 'MistyWater',
-      senderAvatar: 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=150',
+      senderId: 'system',
+      senderName: 'System',
+      senderAvatar: '',
       senderTeam: 'Mystic',
-      message: 'Welcome everyone to our Pokémon GO group! Make sure to host raids and copy trainer IDs to make friends! ⚡🌧️',
+      message: 'Welcome to Pokémon GO community!',
       createdAt: new Date(Date.now() - 3600000 * 2).toISOString()
     });
+
     state.chatMessages.push({
       id: 'welcome_2',
       roomId: 'general',
-      senderId: 'player1',
-      senderName: 'AshKetchum',
-      senderAvatar: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150',
+      senderId: 'system',
+      senderName: 'System',
+      senderAvatar: '',
       senderTeam: 'Valor',
-      message: 'Looking for a Kyogre raid today! If anyone has one nearby, please host it! I am ready to join!',
+      message: 'Host raids and join battles!',
       createdAt: new Date(Date.now() - 3600000).toISOString()
     });
   }
