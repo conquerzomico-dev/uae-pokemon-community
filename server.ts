@@ -47,54 +47,8 @@ const seedState = () => {
     joinedAt: new Date().toISOString()
   };
 
-  // ✅ ALWAYS define players INSIDE function
-  const players = [
-    {
-      id: 'player1',
-      name: 'AshKetchum',
-      team: 'Valor',
-      code: '123456789012',
-      email: 'ash@pallet.com',
-      role: 'Trainer',
-      avatar: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150'
-    },
-    {
-      id: 'player2',
-      name: 'MistyWater',
-      team: 'Mystic',
-      code: '987654321098',
-      email: 'misty@cerulean.com',
-      role: 'Trader',
-      avatar: 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=150'
-    },
-    {
-      id: 'player3',
-      name: 'SparkyGamer',
-      team: 'Instinct',
-      code: '555544443333',
-      email: 'spark@yellow.com',
-      role: 'Trainer',
-      avatar: 'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=150'
-    }
-  ];
-
-  players.forEach((p) => {
-    state.users[p.id] = {
-      id: p.id,
-      email: p.email,
-      trainerName: p.name,
-      gameCode: p.code,
-      team: p.team,
-      role: p.role,
-      isAdmin: false,
-      isModerator: false,
-      rating: 4.8,
-      ratingCount: 4,
-      avatarUrl: p.avatar,
-      onlineStatus: true,
-      joinedAt: new Date().toISOString()
-    };
-  });
+  // ❌ NO TEST USERS ANYMORE
+  // App will start empty for normal users
 };
   // Prepopulate standard global chat messages if empty
   if (state.chatMessages.length === 0) {
