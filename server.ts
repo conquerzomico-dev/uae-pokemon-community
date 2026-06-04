@@ -298,6 +298,73 @@ app.post('/api/members/role', (req, res) => {
 
   res.json({ success: true, target });
 });
+// Delete user (MODERATOR ONLY)
+app.post('/api/members/delete', (req, res) => {
+  const { targetUserId, moderatorId } = req.body;
+
+  const moderator = state.users[moderatorId];
+
+  if (
+    !moderator ||
+    moderator.email.toLowerCase() !== 'ahmedfoox21@gmail.com'
+  ) {
+    return res.status(403).json({
+      error: 'Only the Moderator can delete users.'
+    });
+  }
+
+  const targetUser = state.users[targetUserId];
+
+  if (!targetUser) {
+    return res.status(404).json({
+      error: 'User not found.'
+    });
+  }
+
+  // Prevent deleting moderator account
+  if (targetUser.isModerator) {
+    return res.status(400).json({
+      error: 'Moderator account cannot be deleted.'
+    });
+  }
+
+  // Remove user
+  delete state.users[targetUserId];
+
+  // Remove notifications
+  delete state.notifications[targetUserId];
+
+  // Remove PMs
+  state.privateMessages = state.privateMessages.filter(
+    pm =>
+      pm.fromId !== targetUserId &&
+      pm.toId !== targetUserId
+  );
+
+  // Remove raid participation
+  Object.values(state.raids).forEach(raid => {
+    raid.participants = raid.participants.filter(
+      id => id !== targetUserId
+    );
+
+    // Delete raids hosted by deleted user
+    if (raid.hostId === targetUserId) {
+      delete state.raids[raid.id];
+    }
+  });
+
+  // Remove chat messages
+  state.chatMessages = state.chatMessages.filter(
+    msg => msg.senderId !== targetUserId
+  );
+
+  saveState();
+
+  res.json({
+    success: true,
+    deletedUserId: targetUserId
+  });
+});
 
 /* ==========================================================================
    PROFILE EDIT ENDPOINTS

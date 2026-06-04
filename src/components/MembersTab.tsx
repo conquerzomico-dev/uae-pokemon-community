@@ -93,7 +93,35 @@ export default function MembersTab({ currentUser, onOpenDirectMessage, onOpenPro
       setLoading(false);
     }
   };
+  
+const handleDeleteUser = async (targetUser: User) => {
+  if (!window.confirm(`Delete ${targetUser.trainerName}?`)) {
+    return;
+  }
 
+  try {
+    const res = await fetch('/api/members/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        targetUserId: targetUser.id,
+        moderatorId: currentUser.id
+      })
+    });
+
+    if (res.ok) {
+      await fetchMembers();
+      setOpenDropdownId(null);
+    } else {
+      const err = await res.json();
+      alert(err.error || 'Failed to delete user.');
+    }
+  } catch (err) {
+    console.error(err);
+  }
+};
   // Dismiss dropdowns on document click
   useEffect(() => {
     const handleDocClick = () => {
@@ -258,24 +286,32 @@ export default function MembersTab({ currentUser, onOpenDirectMessage, onOpenPro
                             <div className="border-t border-stone-100 dark:border-stone-805 my-1.5 pt-1.5 px-3">
                               <p className="text-[9px] text-stone-400 font-bold uppercase tracking-wider mb-1">Moderator Power</p>
                               
-                              {member.isAdmin ? (
                                 <button
-                                  onClick={() => handleToggleAdminRole(member, false)}
-                                  disabled={loading}
-                                  className="w-full text-left py-1 text-rose-500 hover:underline leading-none flex items-center gap-1 cursor-pointer font-semibold"
-                                >
-                                  <UserMinus className="h-3.5 w-3.5" />
-                                  Remove Admin Role
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleToggleAdminRole(member, true)}
-                                  disabled={loading}
-                                  className="w-full text-left py-1 text-green-600 hover:underline leading-none flex items-center gap-1 cursor-pointer font-semibold"
-                                >
-                                  <UserPlus className="h-3.5 w-3.5" />
-                                  Give Admin Role
-                                </button>
+    onClick={() => handleToggleAdminRole(member, false)}
+    disabled={loading}
+    className="w-full text-left py-1 text-rose-500 hover:underline leading-none flex items-center gap-1 cursor-pointer font-semibold"
+  >
+    <UserMinus className="h-3.5 w-3.5" />
+    Remove Admin Role
+  </button>
+) : (
+  <button
+    onClick={() => handleToggleAdminRole(member, true)}
+    disabled={loading}
+    className="w-full text-left py-1 text-green-600 hover:underline leading-none flex items-center gap-1 cursor-pointer font-semibold"
+  >
+    <UserPlus className="h-3.5 w-3.5" />
+    Give Admin Role
+  </button>
+)}
+
+<button
+  onClick={() => handleDeleteUser(member)}
+  disabled={loading}
+  className="w-full text-left py-1 text-red-600 hover:underline leading-none flex items-center gap-1 cursor-pointer font-semibold mt-2"
+>
+  🗑 Delete User
+</button>
                               )}
                             </div>
                           )}
