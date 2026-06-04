@@ -72,16 +72,23 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
 
         if (res.ok) {
           const result = await res.json();
-          if (result.data?.pokemonName) {
-            const { pokemonName: dName, level: dLvl, cp: dCp, gymName: dGym } = result.data;
-           if (dName && dName.trim() !== '') setPokemonName(dName);
-if (dLvl !== null && dLvl !== undefined) setLevel(String(dLvl));
-if (dCp !== null && dCp !== undefined) setCp(String(dCp));
-if (dGym && dGym.trim() !== '') setGymName(dGym);
-            setAiScanNotice(`AI Successfully scanned! Auto-filled: ${dName || 'Raid Boss'}`);
-          } else {
-            alert('AI Scan could not extract data, please fill details manually.');
-          }
+
+if (result.data) {
+  const { pokemonName, level, cp, gymName } = result.data;
+
+  if (pokemonName) setPokemonName(pokemonName);
+  if (level !== null) setLevel(String(level));
+  if (cp !== null) setCp(String(cp));
+  if (gymName) setGymName(gymName);
+
+  setAiScanNotice(
+    result.success
+      ? `AI Successfully scanned! Auto-filled: ${pokemonName}`
+      : `Scan completed with fallback data`
+  );
+} else {
+  alert('AI Scan could not extract data, please fill manually.');
+}
         } else {
           alert('Failed to connect to AI scanner. Please enter manually.');
         }
