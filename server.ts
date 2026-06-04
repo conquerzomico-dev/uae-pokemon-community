@@ -419,7 +419,7 @@ app.post('/api/raids/scan-screenshot', async (req, res) => {
       apiKey: process.env.GEMINI_API_KEY,
     });
 
-    let cleanBase64 = base64.includes(",")
+    const cleanBase64 = base64.includes(",")
       ? base64.split(",")[1]
       : base64;
 
@@ -443,54 +443,53 @@ Return ONLY valid JSON:
   "gymName": string,
   "remainingMinutes": number
 }
-
-RULES:
-- Do NOT return null
-- Do NOT return unknown
-- If unsure, make best visual guess from raid boss image + UI
-- Output ONLY JSON
 `
     };
 
     const response = await ai.models.generateContent({
       model: "gemini-1.5-pro-vision",
-      contents: {
-        parts: [imagePart, textPart],
-      },
+      contents: { parts: [imagePart, textPart] },
     });
 
-    // ✅ IMPORTANT FIX HERE
     const raw =
-  response.candidates?.[0]?.content?.parts?.map(p => p.text).join('') ||
-  response.text ||
-  '';
+      response.candidates?.[0]?.content?.parts?.map(p => p.text).join('') ||
+      response.text ||
+      '';
 
-if (!raw) {
-  return res.json({ success: false, data: fallbackData });
-}
+    if (!raw) {
+      return res.json({ success: false, data: fallbackData });
+    }
 
-// CLEAN markdown ```json ``` if present
-const cleaned = raw
-  .replace(/```json/g, '')
-  .replace(/```/g, '')
-  .trim();
+    const cleaned = raw
+      .replace(/```json/g, '')
+      .replace(/```/g, '')
+      .trim();
 
-let parsed;
+    let parsed;
 
-try {
-  parsed = JSON.parse(cleaned);
-} catch (err) {
-  console.log("❌ Gemini RAW OUTPUT:", raw);
-  return res.json({
-    success: false,
-    data: fallbackData,
-    raw
-  });
-}
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (err) {
+      console.log("❌ Gemini RAW OUTPUT:", raw);
+      return res.json({
+        success: false,
+        data: fallbackData,
+        raw
+      });
+    }
 
-return res.json({
-  success: true,
-  data: parsed
+    return res.json({
+      success: true,
+      data: parsed
+    });
+
+  } catch (err) {
+    console.error("Scan error:", err);
+    return res.status(500).json({
+      success: false,
+      data: fallbackData
+    });
+  }
 });
 /* ==========================================================================
    RAIDS ENDPOINTS
