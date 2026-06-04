@@ -1,0 +1,6 @@
+{
+  "name": "UAE Poké-community",
+  "description": "A fully-functional full-stack community application for Pokémon GO players, featuring user registration, raid hosting, scores/rankings, multi-channel chats, custom avatars, private messaging, and moderator roles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
