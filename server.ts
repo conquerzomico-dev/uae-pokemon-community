@@ -400,12 +400,9 @@ app.post('/api/profile/edit', (req, res) => {
 
 // AI Screenshot Scan endpoint using Gemini
 app.post('/api/raids/scan-screenshot', async (req, res) => {
-	onsole.log("🔥 scan-screenshot hit");
-  const { base64, mimeType } = req.body;
+  console.log("🔥 scan-screenshot hit");
 
-  if (!base64) {
-    return res.status(400).json({ error: "No image data provided" });
-  }
+  const { base64, mimeType } = req.body;
 
   const fallbackData = {
     pokemonName: "Unknown",
@@ -416,11 +413,18 @@ app.post('/api/raids/scan-screenshot', async (req, res) => {
   };
 
   try {
+    if (!base64) {
+      return res.json({
+        success: false,
+        data: fallbackData
+      });
+    }
+
     const ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
     });
 
-    const cleanBase64 = base64.includes(",")
+    let cleanBase64 = base64.includes(",")
       ? base64.split(",")[1]
       : base64;
 
@@ -436,7 +440,6 @@ app.post('/api/raids/scan-screenshot', async (req, res) => {
 Extract Pokémon GO RAID INFO from this screenshot.
 
 Return ONLY valid JSON:
-
 {
   "pokemonName": string,
   "level": number,
@@ -458,20 +461,11 @@ Return ONLY valid JSON:
       '';
 
     if (!raw) {
-     return res.json({
-  success: true,
-  data: parsed
-});
-} catch (err) {
-  console.log("❌ Gemini RAW OUTPUT:", raw);
-  return res.json({
-    success: false,
-    data: fallbackData,
-    raw
-  });
-}
-});
-    
+      return res.json({
+        success: false,
+        data: fallbackData
+      });
+    }
 
     const cleaned = raw
       .replace(/```json/g, '')
@@ -480,35 +474,32 @@ Return ONLY valid JSON:
 
     let parsed;
 
-try {
-  if (!raw) {
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (err) {
+      console.log("❌ Gemini RAW OUTPUT:", raw);
+
+      return res.json({
+        success: false,
+        data: fallbackData,
+        raw
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: parsed
+    });
+
+  } catch (err) {
+    console.log("❌ Server Error:", err);
+
     return res.json({
       success: false,
       data: fallbackData
     });
   }
-
-  const cleaned = raw
-    .replace(/```json/g, '')
-    .replace(/```/g, '')
-    .trim();
-
-  parsed = JSON.parse(cleaned);
-
-  return res.json({
-    success: true,
-    data: parsed
-  });
-
-} catch (err) {
-  console.log("❌ Gemini RAW OUTPUT:", raw);
-
-  return res.json({
-    success: false,
-    data: fallbackData,
-    raw
-  });
-}
+});
 /* ==========================================================================
    RAIDS ENDPOINTS
    ========================================================================== */
