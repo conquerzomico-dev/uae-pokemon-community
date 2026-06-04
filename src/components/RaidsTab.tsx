@@ -72,7 +72,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
 
         if (res.ok) {
           const result = await res.json();
-          if (result.success && result.data) {
+          if (result.data?.pokemonName) {
             const { pokemonName: dName, level: dLvl, cp: dCp, gymName: dGym } = result.data;
            if (dName && dName.trim() !== '') setPokemonName(dName);
 if (dLvl !== null && dLvl !== undefined) setLevel(String(dLvl));
