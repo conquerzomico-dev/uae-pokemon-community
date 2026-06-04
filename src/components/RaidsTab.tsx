@@ -82,7 +82,10 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
 
             setAiScanNotice(`AI Successfully scanned! Auto-filled: ${pokemonName}`);
           } else {
-            setAiScanNotice('AI could not fully extract data. Using default filled templates.');
+            const errMsg = result.error || 'AI could not fully extract data.';
+            setAiScanNotice(`Scanner Notice: ${errMsg}`);
+            alert(`Scanner Error: ${errMsg}\n\nPlease verify that your GEMINI_API_KEY environment variable is correctly set in your Render / hosting panel configurations.`);
+            
             if (result.data) {
               const { pokemonName, level: detectedLevel, cp: detectedCp, gymName: detectedGymName } = result.data;
               if (pokemonName) setPokemonName(pokemonName);
@@ -92,7 +95,16 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
             }
           }
         } else {
-          alert('Failed to connect to AI scanner. Please enter manually.');
+          try {
+            const errorObj = await res.json();
+            if (errorObj && errorObj.error) {
+              alert(`Scanner Error: ${errorObj.error}`);
+            } else {
+              alert(`Failed to connect to AI scanner (Status Code ${res.status}). Please enter manually.`);
+            }
+          } catch {
+            alert(`Failed to connect to AI scanner (HTTP ${res.status}). Please check express body size limit or key.`);
+          }
         }
       } catch (err) {
         console.error(err);
