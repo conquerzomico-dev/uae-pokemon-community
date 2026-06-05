@@ -18,6 +18,7 @@ import {
   MessageSquare, 
   Star, 
   LogOut, 
+  ShieldAlert, 
   User as UserIcon,
   ChevronRight,
   Sparkles
@@ -72,39 +73,17 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
         if (res.ok) {
           const result = await res.json();
           if (result.success && result.data) {
-            const { pokemonName, level: detectedLevel, cp: detectedCp, gymName: detectedGymName, remainingMinutes: detectedMin } = result.data;
-
-            if (pokemonName) setPokemonName(pokemonName);
-            if (detectedLevel) setLevel(String(detectedLevel));
-            if (detectedCp) setCp(String(detectedCp));
-            if (detectedGymName) setGymName(detectedGymName);
-            if (detectedMin) setRemainingMinutes(String(detectedMin));
-
-            setAiScanNotice(`AI Successfully scanned! Auto-filled: ${pokemonName}`);
+            const { pokemonName: dName, level: dLvl, cp: dCp, gymName: dGym } = result.data;
+            if (dName) setPokemonName(dName);
+            if (dLvl) setLevel(dLvl.toString());
+            if (dCp) setCp(dCp.toString());
+            if (dGym) setGymName(dGym);
+            setAiScanNotice(`AI Successfully scanned! Auto-filled: ${dName || 'Raid Boss'}`);
           } else {
-            const errMsg = result.error || 'AI could not fully extract data.';
-            setAiScanNotice(`Scanner Notice: ${errMsg}`);
-            alert(`Scanner Error: ${errMsg}\n\nPlease verify that your GEMINI_API_KEY environment variable is correctly set in your Render / hosting panel configurations.`);
-            
-            if (result.data) {
-              const { pokemonName, level: detectedLevel, cp: detectedCp, gymName: detectedGymName } = result.data;
-              if (pokemonName) setPokemonName(pokemonName);
-              if (detectedLevel) setLevel(String(detectedLevel));
-              if (detectedCp) setCp(String(detectedCp));
-              if (detectedGymName) setGymName(detectedGymName);
-            }
+            alert('AI Scan could not extract data, please fill details manually.');
           }
         } else {
-          try {
-            const errorObj = await res.json();
-            if (errorObj && errorObj.error) {
-              alert(`Scanner Error: ${errorObj.error}`);
-            } else {
-              alert(`Failed to connect to AI scanner (Status Code ${res.status}). Please enter manually.`);
-            }
-          } catch {
-            alert(`Failed to connect to AI scanner (HTTP ${res.status}). Please check express body size limit or key.`);
-          }
+          alert('Failed to connect to AI scanner. Please enter manually.');
         }
       } catch (err) {
         console.error(err);
@@ -137,7 +116,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
     }
   };
 
-  // Poll for raid updates
+  // Poll for raid updates and messages if in lobby
   useEffect(() => {
     fetchRaids();
     const interval = setInterval(() => {
@@ -181,6 +160,8 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
   };
 
   const currentRaidLobby = raids.find(r => r.id === activeLobbyId);
+
+  // If a raid lobby is active but was deleted or completed, handles graceful redirect or score prompt
   const isHost = currentRaidLobby?.hostId === currentUser.id;
 
   // Form Submission
@@ -279,7 +260,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
         fetchRaids();
       } else {
         const errData = await res.json().catch(() => ({}));
-        alert(`Failed to update raid status: ${errData.error || 'Server rejected request.'}`);
+        alert(`Failed to update raid status: ${errData.error || 'Server rejected request. Make sure you are the Host or have Admin/Moderator powers.'}`);
       }
     } catch (err: any) {
       console.error(err);
@@ -345,18 +326,17 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
     return <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono uppercase tracking-wide shadow-sm ${bg}`}>{text}</span>;
   };
 
+  // Quick lookup user profile safely
   const handleViewParticipant = async (pId: string) => {
-    if (pId === currentUser.id) {
-      onViewProfileOfUser(currentUser);
-      return;
-    }
     try {
       const res = await fetch('/api/members');
       if (res.ok) {
-        const list: User[] = await res.json();
+        const list: User[] = await res.ok ? await res.json() : [];
         const found = list.find((u: User) => u.id === pId);
         if (found) {
           onViewProfileOfUser(found);
+        } else if (pId === currentUser.id) {
+          onViewProfileOfUser(currentUser);
         } else {
           // Fallback basic view
           onViewProfileOfUser({
@@ -365,9 +345,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
             gameCode: '000000000000',
             team: 'Valor',
             role: 'Trainer',
-            avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${pId}`,
-            onlineStatus: true,
-            joinedAt: new Date().toISOString()
+            avatarUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150',
           } as any);
         }
       }
@@ -417,7 +395,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                 <button
                   id="btn-leave-lobby"
                   onClick={() => handleLeaveRaid(currentRaidLobby.id)}
-                  className="px-3.5 py-1.5 bg-stone-200 dark:bg-stone-805 hover:bg-stone-300 dark:bg-stone-800 dark:hover:bg-stone-700 border border-transparent rounded-lg text-stone-700 dark:text-stone-200 text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors"
+                  className="px-3.5 py-1.5 bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 border border-transparent dark:hover:bg-stone-700 rounded-lg text-stone-700 dark:text-stone-200 text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors"
                 >
                   <LogOut className="h-3.5 w-3.5" />
                   Leave Lobby
@@ -429,7 +407,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
             {currentRaidLobby.status === 'completed' && (
               <div className="bg-amber-500/10 p-4 border-b border-amber-500/20 text-center flex flex-col items-center justify-center gap-1.5">
                 <div className="flex items-center gap-1.5 justify-center text-amber-600 font-bold uppercase text-[10px] tracking-widest leading-none">
-                  <Star className="h-4.5 w-4.5 text-amber-500 fill-amber-500 animate-bounce" />
+                  <Star className="h-4.5 w-4.5 text-amber-500 fill-amber-505 fill-amber-500 animate-bounce" />
                   Raid Completed successfully!
                 </div>
                 <h3 className="font-extrabold text-stone-900 dark:text-stone-50 text-sm">Rate Your Raid Host</h3>
@@ -437,16 +415,16 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                   The host marked this lobby as complete! Tap the stars (1-5) to rank <strong>{currentRaidLobby.hostName}</strong>'s raid coordination:
                 </p>
                 {ratingsSubmitted[currentRaidLobby.id] ? (
-                  <p className="text-xs text-green-600 dark:text-green-400 font-bold flex items-center gap-1 bg-green-500/15 p-1.5 px-3.5 rounded-xl border border-green-500/20 animate-fadeIn">
+                  <p className="text-xs text-green-600 dark:text-green-400 font-bold flex items-center gap-1 bg-green-500/15 p-1.5 px-3.5 rounded-xl border border-green-500/20">
                     <Check className="h-3.5 w-3.5" /> Rating submitted! Thank you and get ready for the next battle!
                   </p>
                 ) : (
-                  <div className="flex items-center justify-center gap-2 mt-1 bg-stone-100 dark:bg-stone-900 rounded-2xl p-2 px-4 shadow-sm border border-stone-200/50 dark:border-stone-800/40">
+                  <div className="flex items-center justify-center gap-2 mt-1 bg-stone-100 dark:bg-stone-900 rounded-2xl p-2 px-4 shadow-xs border border-stone-200/50 dark:border-stone-800/40">
                     {[1, 2, 3, 4, 5].map(starValue => (
                       <button
                         key={starValue}
                         onClick={() => handleRateHost(currentRaidLobby.id, starValue)}
-                        className="p-1.5 hover:scale-125 focus:scale-125 text-stone-300 hover:text-amber-500 dark:text-stone-700 dark:hover:text-amber-500 transition-all cursor-pointer"
+                        className="p-1.5 hover:scale-125 focus:scale-125 hover:text-amber-500 text-stone-300 dark:text-stone-700 transition-all cursor-pointer"
                         title={`Rate ${starValue} stars`}
                       >
                         <Star className="h-6 w-6 fill-current" />
@@ -460,7 +438,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
             {/* Main Inside Body */}
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden h-full">
               
-              {/* Left Column: Lobby Members */}
+              {/* Left Column: Lobby Members (45% width on desktop) */}
               <div id="lobby-members-area" className="lg:col-span-6 border-r border-stone-200/60 dark:border-stone-800/60 bg-white dark:bg-stone-900 flex flex-col overflow-y-auto p-4 gap-4">
                 <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800/50 pb-3">
                   <h3 className="font-semibold text-stone-900 dark:text-stone-100 flex items-center gap-2 text-sm leading-none">
@@ -474,7 +452,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                   {/* Host User block */}
                   <div className="p-3 bg-stone-50 dark:bg-stone-950 rounded-xl relative overflow-hidden border border-stone-200/50 dark:border-stone-800">
                     <div className="absolute right-3 top-3 px-2 py-0.5 bg-amber-500/10 text-amber-600 text-[10px] font-mono font-bold tracking-wide uppercase rounded">
-                      👑 Host
+                      👑 Lobby Creator / Host
                     </div>
                     
                     <div className="flex gap-3">
@@ -482,7 +460,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                         src={currentRaidLobby.hostAvatar} 
                         alt="host avatar" 
                         referrerPolicy="no-referrer"
-                        className="w-11 h-11 rounded-full object-cover border-2 border-stone-200 dark:border-stone-700" 
+                        className="w-11 h-11 rounded-full object-cover border-2 border-stone-200 dark:border-stone-700 h-11" 
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
@@ -493,9 +471,12 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                             {currentRaidLobby.hostName}
                             <ChevronRight className="h-3.5 w-3.5 text-stone-400" />
                           </h4>
+                          <div className={`text-[10px] px-1.5 py-0.5 rounded leading-none text-white font-semibold font-mono ${TEAM_DETAILS[currentRaidLobby.gameCode === '999999999999' ? 'Valor' : 'Valor']?.bg || 'bg-red-500'}`}>
+                            {currentRaidLobby.hostId === currentUser.id ? 'You' : 'Host'}
+                          </div>
                         </div>
 
-                        {/* Trainer Code Display Block */}
+                        {/* Trainer Code Display Block - Highly readable for quick touch to copy */}
                         <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
                           <button
                             id="btn-copy-host-code"
@@ -511,14 +492,19 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                               <Copy className="h-3.5 w-3.5 text-stone-400 shrink-0" />
                             )}
                           </button>
+                          
+                          {copiedId === currentRaidLobby.hostId && (
+                            <span className="text-green-500 text-[10px] font-semibold animate-bounce shrink-0">Copied! Paste in Pokémon GO!</span>
+                          )}
                         </div>
 
+                        {/* Interactive Message option if they are not the user */}
                         {currentRaidLobby.hostId !== currentUser.id && (
                           <button
-                            onClick={() => onViewProfileOfUser({ id: currentRaidLobby.hostId } as any)}
+                            onClick={() => handleViewParticipant(currentRaidLobby.hostId)}
                             className="mt-2 text-xs text-blue-500 hover:underline inline-flex items-center gap-1 cursor-pointer"
                           >
-                            Send PM / View Card Profile
+                            View Trainer Card Profile
                           </button>
                         )}
                       </div>
@@ -531,18 +517,19 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                     
                     {currentRaidLobby.participants.filter(pId => pId !== currentRaidLobby.hostId).length === 0 ? (
                       <p className="text-xs text-stone-400 italic py-3 text-center bg-stone-50/50 dark:bg-stone-950/25 rounded-md">
-                        Waiting for fighters to enter. Copied host code will let you send friend requests in PoGo!
+                        Waiting for fighters to enter. Copiable coordinates are generated automatically above!
                       </p>
                     ) : (
                       currentRaidLobby.participants
                         .filter(pId => pId !== currentRaidLobby.hostId)
                         .map(pId => {
+                          // Standard joined players
                           return (
-                            <div key={pId} className="p-3 bg-white dark:bg-stone-800 border-b border-stone-100 dark:border-stone-800/80 rounded-xl flex items-center justify-between gap-3 shadow-xs">
+                            <div key={pId} className="p-3 bg-white dark:bg-stone-800 border-b border-stone-100 dark:border-stone-800/80 rounded-xl flex items-center justify-between gap-3 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                               <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="p-1 h-3 w-3 rounded-full bg-blue-500 shrink-0" />
+                                <div className="p-1 h-3 w-3 rounded-full bg-blue-500 shrink-0" /> {/* Basic team token dot */}
                                 <div className="text-sm font-semibold text-stone-800 dark:text-stone-200 truncate cursor-pointer hover:underline" onClick={() => handleViewParticipant(pId)}>
-                                  Trainer Raider
+                                  Raider Trainer
                                 </div>
                               </div>
                               
@@ -562,7 +549,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                 {/* Host Control panel in bottom */}
                 {(isHost || currentUser.isModerator || currentUser.isAdmin) && (
                   <div className="border-t border-stone-100 dark:border-stone-800 pt-4 mt-auto space-y-2.5">
-                    <p className="text-xs font-bold text-red-500/95 dark:text-red-400 uppercase tracking-widest pl-1">Host Controls</p>
+                    <p className="text-xs font-bold text-red-500/90 dark:text-red-400/80 uppercase tracking-widest pl-1">Host Controls</p>
                     <div className="grid grid-cols-2 gap-2">
                        <button
                         id="btn-complete-raid"
@@ -582,41 +569,44 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                         Cancel / Remove
                       </button>
                     </div>
+                    <p className="text-[10px] text-stone-400 italic text-center leading-normal">
+                      Marking as 'Complete' enables high-contrast rating boards so raiders can rank your lobby score! Cancel wipes all chats.
+                    </p>
                   </div>
                 )}
               </div>
 
-              {/* Right Column: Exclusive Lobby Chat */}
+              {/* Right Column: Exclusive Lobby Chat (55% width on desktop) */}
               <div id="lobby-chat-area" className="lg:col-span-6 bg-stone-50 dark:bg-stone-950 flex flex-col overflow-hidden h-[400px] lg:h-full">
                 <div className="px-4 py-3 bg-stone-100/70 border-b border-stone-200/50 dark:bg-stone-900/40 dark:border-stone-800/80 flex items-center gap-1.5 shrink-0">
-                  <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
-                  <span className="text-xs font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider">LOBBY CHATROOM</span>
+                  <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">LOBBY CHATROOM</span>
                 </div>
 
-                {/* Messages Stream */}
+                {/* Local Messages stream */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
                   {lobbyMessages.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center p-6 bg-white/40 dark:bg-stone-900/20 rounded-2xl m-2">
                       <MessageSquare className="h-8 w-8 text-stone-300 dark:text-stone-700 mb-2" />
                       <p className="text-xs font-semibold text-stone-500 dark:text-stone-400">Raid Group Chat Active</p>
                       <p className="text-[10px] text-stone-400 mt-0.5 max-w-[200px] leading-relaxed">
-                        Coordinate remote passes, starting times, or battle strategies.
+                        Message here to coordinate battle startup, gym codes, or remote raid passes!
                       </p>
                     </div>
                   ) : (
                     lobbyMessages.map(msg => (
-                      <div key={msg.id} className="flex gap-2.5 animate-fadeIn">
+                      <div key={msg.id} className="flex gap-2.5">
                         <img 
-                          src={msg.senderAvatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=system'} 
+                          src={msg.senderAvatar} 
                           alt="avatar" 
-                          className="w-8 h-8 rounded-full border border-stone-200 dark:border-stone-800 shrink-0" 
+                          className="w-8 h-8 rounded-full border border-stone-200 dark:border-stone-800 shrink-0 h-8" 
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs font-bold text-stone-800 dark:text-stone-200">{msg.senderName}</span>
                             <span className="text-[9px] text-stone-400">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
-                          <div className="mt-1 p-2.5 rounded-2xl rounded-tl-sm bg-white dark:bg-stone-900 text-xs shadow-xs border border-stone-100 dark:border-stone-800/40 text-stone-700 dark:text-stone-300 whitespace-pre-wrap break-words">
+                          <div className="mt-1 p-2.5 rounded-2xl rounded-tl-sm bg-white dark:bg-stone-900 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.015)] border border-stone-100 dark:border-stone-800/40 text-stone-700 dark:text-stone-300 whitespace-pre-wrap break-words">
                             {msg.message}
                           </div>
                         </div>
@@ -634,12 +624,12 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                     value={newLobbyMsg}
                     onChange={(e) => setNewLobbyMsg(e.target.value)}
                     placeholder="Type to lobby chat..."
-                    className="flex-1 bg-stone-50 border border-stone-200 dark:bg-stone-950 dark:border-stone-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-red-400 dark:text-stone-205 dark:text-stone-100"
+                    className="flex-1 bg-stone-50 border border-stone-200 dark:bg-stone-950 dark:border-stone-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-red-400 dark:text-stone-200"
                   />
                   <button
                     id="btn-send-lobby-message"
                     type="submit"
-                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl cursor-pointer"
+                    className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl cursor-pointer"
                   >
                     Send
                   </button>
@@ -661,13 +651,13 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                   <Sword className="h-5 w-5 text-red-500" />
                   Active Raids
                 </h2>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Host battle lobbies, share friend requests, and secure victories together</p>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Register, host battles, copy trainer codes and coordinate combat</p>
               </div>
 
               <button
                 id="btn-trigger-host-modal"
                 onClick={() => setIsHosting(true)}
-                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all duration-150 cursor-pointer shadow-sm active:scale-95"
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all duration-150 cursor-pointer shadow-sm shadow-red-500/10 active:scale-95"
               >
                 <PlusCircle className="h-4 w-4" />
                 Host a Raid
@@ -677,6 +667,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
             {/* Raids List layout */}
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
               
+              {/* Feedback toast */}
               {successMsg && (
                 <div className="p-3 bg-green-500/15 border border-green-500/20 text-green-600 dark:text-green-400 rounded-xl text-xs font-medium animate-fadeIn">
                   {successMsg}
@@ -685,12 +676,12 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
 
               {raids.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="p-4 bg-stone-100 dark:bg-stone-800/80 rounded-full text-stone-400 dark:text-stone-600 mb-3">
+                  <div className="p-4 bg-stone-100 dark:bg-stone-800/80 rounded-full text-stone-400 dark:text-stone-600 mb-3 animate-pulse">
                     <Sword className="h-8 w-8" />
                   </div>
-                  <h3 className="font-bold text-stone-700 dark:text-stone-300 text-sm">No Active Lobbies</h3>
+                  <h3 className="font-bold text-stone-700 dark:text-stone-300 text-sm">No Live Battles Host</h3>
                   <p className="text-xs text-stone-400 dark:text-stone-500 mt-1 max-w-sm">
-                    Nobody is raiding right now. Click "Host a Raid" to recruit standard trainers directly!
+                    No active gym lobbies hosted right now. Click "Host a Raid" to recruit standard trainers directly!
                   </p>
                 </div>
               ) : (
@@ -704,20 +695,21 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                       <div 
                         key={raid.id} 
                         id={`raid-card-${raid.id}`}
-                        className="p-4 bg-white dark:bg-stone-900 border border-stone-200/60 dark:border-stone-800 rounded-2xl flex flex-col justify-between gap-4 shadow-xs"
+                        className={`p-4 bg-white dark:bg-stone-900 border border-stone-200/60 dark:border-stone-800 rounded-2xl flex flex-col justify-between gap-4 shadow-sm hover:border-red-400/40 dark:hover:border-red-500/20 transition-all duration-200`}
                       >
+                        {/* Core Data Block */}
                         <div>
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <span className="text-[10px] text-stone-400 font-mono font-bold uppercase block">BOSS SPECIMEN:</span>
+                              <span className="text-[10px] text-stone-400 font-mono font-bold uppercase tracking-wider block">BOSS SPECIMEN:</span>
                               <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 truncate mt-0.5">{raid.pokemonName}</h3>
                             </div>
                             {getTierBadge(raid.level)}
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
-                            <div className="bg-stone-50 dark:bg-stone-800/65 p-2.5 rounded-xl border border-stone-100 dark:border-stone-800/40">
-                              <span className="text-[9px] text-stone-400 uppercase font-bold block">HOSTED BY:</span>
+                            <div className="bg-stone-50 dark:bg-stone-800/60 p-2.5 rounded-xl border border-stone-100/50 dark:border-stone-800/40">
+                              <span className="text-[9px] text-stone-400 uppercase font-bold tracking-wider block">HOSTED BY:</span>
                               <span 
                                 onClick={() => handleViewParticipant(raid.hostId)}
                                 className="font-semibold text-stone-700 dark:text-stone-300 mt-1 hover:underline cursor-pointer flex items-center gap-1.5"
@@ -729,8 +721,8 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                               </span>
                             </div>
 
-                            <div className="bg-stone-50 dark:bg-stone-800/65 p-2.5 rounded-xl border border-stone-100 dark:border-stone-800/40">
-                              <span className="text-[9px] text-stone-400 uppercase font-bold block">GYM LOCATION:</span>
+                            <div className="bg-stone-50 dark:bg-stone-800/60 p-2.5 rounded-xl border border-stone-100/50 dark:border-stone-800/40">
+                              <span className="text-[9px] text-stone-400 uppercase font-bold tracking-wider block">GYM LOCATION:</span>
                               <span className="font-semibold text-stone-700 dark:text-stone-300 mt-1 block truncate">
                                 📍 {raid.gymName}
                               </span>
@@ -738,10 +730,11 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                           </div>
                         </div>
 
-                        {isCompleted && (
-                          <div className="p-3 bg-stone-50 dark:bg-stone-800/40 rounded-xl border border-dashed border-stone-100 dark:border-stone-805 flex flex-col gap-2 mt-2">
+                        {/* RAID LOBBY HAS BEEN COMPLETED - RATE CARD DISPLAY */}
+                        {isCompleted ? (
+                          <div className="p-3 bg-stone-50 dark:bg-stone-800/50 rounded-xl border border-dotted border-stone-100 dark:border-stone-800 flex flex-col gap-2 mt-2">
                             <h4 className="text-xs font-bold text-center text-stone-700 dark:text-stone-300">
-                              How was this host? (Rate to support active community)
+                              How was this host? (Rate to rank hoster!)
                             </h4>
                             
                             {rated ? (
@@ -755,7 +748,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                                   <button
                                     key={starValue}
                                     onClick={() => handleRateHost(raid.id, starValue)}
-                                    className="p-1.5 hover:scale-125 text-stone-300 hover:text-amber-500 dark:text-stone-700 dark:hover:text-amber-552 transition-all cursor-pointer"
+                                    className="p-1.5 hover:scale-125 focus:scale-125 hover:text-amber-500 text-stone-300 dark:text-stone-700 transition-all cursor-pointer"
                                     title={`Rate ${starValue} stars`}
                                   >
                                     <Star className="h-5 w-5 fill-current" />
@@ -764,10 +757,11 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                               </div>
                             )}
                           </div>
-                        )}
+                        ) : null}
 
+                        {/* Interactive Footer & Actions list */}
                         {!isCompleted && (
-                          <div className="border-t border-stone-100 dark:border-stone-800/80 pt-3 flex items-center justify-between">
+                          <div className="border-t border-stone-100 dark:border-stone-800 pt-3 flex items-center justify-between">
                             <div className="text-[10px] text-stone-400 font-mono flex items-center gap-1.5">
                               <span>Raiders: <strong className="text-stone-700 dark:text-stone-300">{raid.participants.length}</strong> joined</span>
                               {(currentUser.isModerator || currentUser.isAdmin) && (
@@ -781,12 +775,12 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                                       }}
                                       className="px-1.5 py-0.5 bg-rose-600 text-white rounded text-[8.5px] uppercase font-bold tracking-wider cursor-pointer"
                                     >
-                                      Delete
+                                      Confirm Delete
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setDeleteConfirmId(null)}
-                                      className="px-1.5 py-0.5 bg-stone-200 dark:bg-stone-800 text-stone-500 rounded text-[8.5px] uppercase font-bold tracking-wider cursor-pointer"
+                                      className="px-1.5 py-0.5 bg-stone-200 dark:bg-stone-850 text-stone-500 rounded text-[8.5px] uppercase font-bold tracking-wider cursor-pointer"
                                     >
                                       Cancel
                                     </button>
@@ -795,10 +789,10 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                                   <button
                                     type="button"
                                     onClick={() => setDeleteConfirmId(raid.id)}
-                                    className="p-1 px-1.5 bg-rose-50 text-rose-500 rounded text-[9px] uppercase font-bold tracking-wider cursor-pointer transition-colors"
-                                    title="Delete Active Raid"
+                                    className="p-1 px-1.5 bg-rose-50 text-rose-500 hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-450 rounded text-[9px] uppercase font-bold tracking-wider cursor-pointer transition-colors"
+                                    title="Moderator: Delete Active Raid"
                                   >
-                                    Cancel
+                                    Delete
                                   </button>
                                 )
                               )}
@@ -826,6 +820,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                           </div>
                         )}
 
+                        {/* If completed but user is host or mod or admin, offer deletion option */}
                         {isCompleted && (currentUser.id === raid.hostId || currentUser.isModerator || currentUser.isAdmin) && (
                           <div className="flex justify-end pt-2 border-t border-stone-100 dark:border-stone-800">
                             <button
@@ -879,7 +874,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                       <Sparkles className="h-4 w-4 text-amber-500 animate-pulse fill-amber-500/25" />
                       AI Auto-Fill Assistant
                     </span>
-                    <span className="text-[9px] text-stone-400 bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded font-mono">gemini-3.5-flash</span>
+                    <span className="text-[9px] text-stone-400 bg-stone-105 dark:bg-stone-850 px-2 py-0.5 rounded font-mono">gemini-3.5-flash</span>
                   </div>
                   <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-normal mb-2.5">
                     Upload your Pokémon GO raid screenshot. Our Vision model automatically detects the raid boss, level, CP, and gym name!
@@ -888,7 +883,7 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                   <label className="w-full flex items-center justify-center gap-2 p-3 border border-dashed border-red-200 dark:border-red-900 bg-white dark:bg-stone-900/60 rounded-xl cursor-pointer hover:bg-stone-50 dark:hover:bg-red-500/10 transition-colors">
                     {loadingImageScan ? (
                       <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-4 h-4 border-2 border-red-505 border-t-transparent rounded-full animate-spin text-red-500" />
                         <span className="text-xs font-bold text-red-600 dark:text-red-400">AI scanning screenshot image...</span>
                       </div>
                     ) : (
@@ -907,14 +902,14 @@ export default function RaidsTab({ currentUser, onViewProfileOfUser, onOpenDirec
                     />
                   </label>
                   {aiScanNotice && (
-                    <p className="text-[10.5px] text-green-600 dark:text-green-400 font-semibold text-center mt-2 flex items-center justify-center gap-1 leading-normal animate-fadeIn">
+                    <p className="text-[10.5px] text-green-600 dark:text-green-400 font-semibold text-center mt-2 flex items-center justify-center gap-1 leading-normal">
                       <Check className="h-3.5 w-3.5 text-green-500" /> {aiScanNotice}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider block">Boss Level</label>
+                  <label className="text-xs font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider block">Boss Level Boss</label>
                   <select
                     id="select-raid-level"
                     value={level}

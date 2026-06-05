@@ -375,17 +375,18 @@ setSelectedImage('');
 >
              
 
-<div className="relative flex items-center shrink-0">
+              <div className="relative flex items-center shrink-0">
   <label
-    htmlFor="pm-image-upload"
-    className="cursor-pointer p-2 rounded-xl border border-stone-200 dark:border-stone-800"
-  >
-    {selectedImage ? (
-      <span className="text-green-500 font-bold text-sm">✓</span>
-    ) : (
-      <ImageIcon className="h-4 w-4 text-stone-500" />
-    )}
-  </label>
+    <label
+  htmlFor="pm-image-upload"
+  className="cursor-pointer p-2 rounded-xl border border-stone-200 dark:border-stone-800"
+>
+  {selectedImage ? (
+    <span className="text-green-500 font-bold text-sm">✓</span>
+  ) : (
+    <ImageIcon className="h-4 w-4 text-stone-500" />
+  )}
+</label>
 
   <input
     id="pm-image-upload"

@@ -42,6 +42,7 @@ export default function ChatTab({ currentUser, onViewProfileOfUser, onJoinRaidLo
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMsg, setNewMsg] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [selectedImage, setSelectedImage] = useState('');
   const [showStickers, setShowStickers] = useState(false);
   const [members, setMembers] = useState<User[]>([]);
   const [raidsList, setRaidsList] = useState<Raid[]>([]);
@@ -109,7 +110,7 @@ export default function ChatTab({ currentUser, onViewProfileOfUser, onJoinRaidLo
   // Send message
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMsg.trim() && !imageUrl) return;
+    if (!newMsg.trim() && !selectedImage) return;
 
     try {
       const res = await fetch('/api/chat/send', {
@@ -119,13 +120,13 @@ export default function ChatTab({ currentUser, onViewProfileOfUser, onJoinRaidLo
           roomId: activeRoom,
           senderId: currentUser.id,
           message: newMsg,
-          imageUrl: imageUrl || undefined
+          imageUrl: selectedImage || undefined
         })
       });
 
       if (res.ok) {
         setNewMsg('');
-        setImageUrl('');
+        setSelectedImage('');
         setShowStickers(false);
         fetchMessages();
       } else {
@@ -136,6 +137,22 @@ export default function ChatTab({ currentUser, onViewProfileOfUser, onJoinRaidLo
       console.error(err);
     }
   };
+  
+  const handleChatImageUpload = (
+  e: React.ChangeEvent<HTMLInputElement>
+) => {
+  const file = e.target.files?.[0];
+
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onloadend = () => {
+    setSelectedImage(reader.result as string);
+  };
+
+  reader.readAsDataURL(file);
+};
 
   // Use Quick sticker
   const handleUseSticker = async (stickerText: string) => {
@@ -401,6 +418,16 @@ export default function ChatTab({ currentUser, onViewProfileOfUser, onJoinRaidLo
                 </div>
               </div>
 
+{selectedImage && (
+  <div className="px-3 pb-2">
+    <img
+      src={selectedImage}
+      alt="preview"
+      className="max-h-32 rounded-xl border border-stone-200 dark:border-stone-800"
+    />
+  </div>
+)}
+
               {/* Form Input fields */}
               <form onSubmit={handleSend} className="flex gap-2">
                 <input
@@ -412,19 +439,26 @@ export default function ChatTab({ currentUser, onViewProfileOfUser, onJoinRaidLo
                   className="flex-1 px-3 py-2 border border-stone-200 bg-stone-50 dark:bg-stone-950 dark:border-stone-800 rounded-xl text-xs focus:outline-none focus:border-red-400 dark:text-stone-200"
                 />
 
-                {/* Optional Image URL paste */}
-                <div className="relative flex items-center">
-                  <input
-                    id="chat-input-image-url"
-                    type="text"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="Photo URL link (Optional)"
-                    className="w-24 sm:w-36 px-2 py-2 border border-stone-200 bg-stone-50 dark:bg-stone-950 dark:border-stone-800 rounded-xl text-[10px] focus:outline-none"
-                    title="Paste a custom image link here"
-                  />
-                  <ImageIcon className="absolute right-2 h-3.5 w-3.5 text-stone-400 pointer-events-none" />
-                </div>
+               <div className="relative flex items-center">
+  <label
+    htmlFor="chat-image-upload"
+    className="cursor-pointer p-2 rounded-xl border border-stone-200 dark:border-stone-800"
+  >
+    {selectedImage ? (
+      <span className="text-green-500 font-bold text-sm">✓</span>
+    ) : (
+      <ImageIcon className="h-4 w-4 text-stone-500" />
+    )}
+  </label>
+
+  <input
+    id="chat-image-upload"
+    type="file"
+    accept="image/*"
+    className="hidden"
+    onChange={handleChatImageUpload}
+  />
+</div>
 
                 <button
                   id="chat-btn-submit"

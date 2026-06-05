@@ -573,7 +573,7 @@ export default function App() {
               <div>
                 <span className="text-sm font-black tracking-wider uppercase bg-gradient-to-r from-red-500 to-stone-100 bg-clip-text text-transparent block">UAE Poké-community</span>
                 {currentUser.isModerator && (
-                  <span className="text-[9px] text-rose-400 font-bold block -mt-1 uppercase tracking-wide">🕵️ SECRET MODERATOR INTERFACE</span>
+                  <span className="text-[9px] text-rose-400 font-bold block -mt-1 uppercase tracking-wide">UAE Pokémon GO Community</span>
                 )}
               </div>
             </div>
@@ -702,10 +702,10 @@ export default function App() {
           </header>
 
           {/* Navigation Tab Menu Sidebar Wrapper */}
-          <div className="flex-1 w-full flex flex-col md:flex-row overflow-hidden">
+          <div className="flex-1 w-full flex flex-row overflow-hidden">
             
             {/* Left Stacked Side Bar Navigation */}
-            <aside className="w-full md:w-64 bg-white/45 dark:bg-stone-900/45 p-3 md:border-r border-stone-200 dark:border-stone-800 flex flex-col gap-2 shrink-0">
+            <aside className="w-16 md:w-64 bg-white/45 dark:bg-stone-900/45 p-2 md:p-3 border-r border-stone-200 dark:border-stone-800 flex flex-col gap-2 shrink-0">
               <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest px-3 hidden md:block mt-2 mb-1">Guild Navigation</span>
               
               <button
@@ -714,7 +714,7 @@ export default function App() {
                 className={`w-full px-4 py-3 font-semibold uppercase text-xs rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'raids' ? 'bg-stone-950 text-white shadow-md' : 'text-stone-600 dark:text-stone-300 hover:bg-stone-200/50 hover:text-stone-950 dark:hover:bg-stone-800'}`}
               >
                 <Sword className="h-4 w-4 shrink-0 text-red-500" />
-                <span>Battles & Raids</span>
+                <span className="hidden md:inline">Battles & Raids</span>
               </button>
 
               <button
@@ -723,7 +723,7 @@ export default function App() {
                 className={`w-full px-4 py-3 font-semibold uppercase text-xs rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'chat' ? 'bg-stone-955 bg-stone-950 text-white shadow-md' : 'text-stone-600 dark:text-stone-300 hover:bg-stone-200/50 hover:text-stone-955 dark:hover:bg-stone-800'}`}
               >
                 <MessageSquare className="h-4 w-4 shrink-0 text-blue-500" />
-                <span>Channels Chat</span>
+                <span className="hidden md:inline">Channels Chat</span>
               </button>
 
               <button
@@ -732,7 +732,7 @@ export default function App() {
                 className={`w-full px-4 py-3 font-semibold uppercase text-xs rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'pms' ? 'bg-stone-955 bg-stone-950 text-white shadow-md' : 'text-stone-600 dark:text-stone-300 hover:bg-stone-200/50 hover:text-stone-955 dark:hover:bg-stone-800'}`}
               >
                 <Mail className="h-4 w-4 shrink-0 text-amber-500" />
-                <span>Direct Mail</span>
+                <span className="hidden md:inline">Direct Mail</span>
               </button>
 
               <button
@@ -741,7 +741,8 @@ export default function App() {
                 className={`w-full px-4 py-3 font-semibold uppercase text-xs rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'members' ? 'bg-stone-955 bg-stone-950 text-white shadow-md' : 'text-stone-600 dark:text-stone-300 hover:bg-stone-200/50 hover:text-stone-955 dark:hover:bg-stone-800'}`}
               >
                 <Users className="h-4 w-4 shrink-0 text-emerald-500" />
-                <span>Roster Members</span>
+                
+				<span className="hidden md:inline">Roster Members</span>
               </button>
 
               <button
@@ -750,12 +751,13 @@ export default function App() {
                 className={`w-full px-4 py-3 font-semibold uppercase text-xs rounded-xl flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'profile' ? 'bg-stone-903 bg-stone-900 text-white shadow-md' : 'text-stone-600 dark:text-stone-300 hover:bg-stone-200/50 hover:text-stone-900 dark:hover:bg-stone-800'}`}
               >
                 <UserIcon className="h-4 w-4 shrink-0 text-purple-500" />
-                <span>Trainer Card</span>
+                
+				<span className="hidden md:inline">Trainer Card</span>
               </button>
             </aside>
 
             {/* MAIN CONTAINER FOR WIDGETS DISPLAY PANEL */}
-            <main className="flex-1 p-4 overflow-hidden">
+            <main className="flex-1 p-2 md:p-4 overflow-hidden min-w-0">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}

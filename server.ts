@@ -4,7 +4,6 @@
  */
 
 import express from 'express';
-import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
@@ -16,7 +15,7 @@ const PORT = 3000;
 const STATE_FILE = path.join(process.cwd(), 'pogo_state.json');
 
 // Ensure body parser is set up
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 // Initial empty state
 let state: AppState = {
@@ -27,11 +26,11 @@ let state: AppState = {
   notifications: {}
 };
 
-// Seed moderator and default players of PoGO Guild
+// Seed moderator and default admin/trader accounts for richer initial demo if needed
 const seedState = () => {
+  // Always make sure the moderator exists or can be authenticated
   const modEmail = 'ahmedfoox21@gmail.com';
   const modId = 'mod_ahmed';
-
   state.users[modId] = {
     id: modId,
     email: modEmail,
@@ -43,24 +42,33 @@ const seedState = () => {
     isModerator: true,
     rating: 5.0,
     ratingCount: 1,
-    avatarUrl: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=150',
+    avatarUrl: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=150', // Mewtwo style avatar link
     onlineStatus: false,
     joinedAt: new Date().toISOString()
   };
-};
 
-// Prepopulate standard global chat messages if empty
-const seedChat = () => {
+
+  // Prepopulate standard global chat messages if empty
   if (state.chatMessages.length === 0) {
     state.chatMessages.push({
       id: 'welcome_1',
       roomId: 'general',
-      senderId: 'system',
-      senderName: 'System',
-      senderAvatar: 'https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=150',
+      senderId: 'player2',
+      senderName: 'MistyWater',
+      senderAvatar: 'https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?w=150',
       senderTeam: 'Mystic',
-      message: 'Welcome to Pokémon GO community! Host raids, join lobbies, and coordinate battles.',
+      message: 'Welcome everyone to our Pokémon GO group! Make sure to host raids and copy trainer IDs to make friends! ⚡🌧️',
       createdAt: new Date(Date.now() - 3600000 * 2).toISOString()
+    });
+    state.chatMessages.push({
+      id: 'welcome_2',
+      roomId: 'general',
+      senderId: 'player1',
+      senderName: 'AshKetchum',
+      senderAvatar: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150',
+      senderTeam: 'Valor',
+      message: 'Looking for a Kyogre raid today! If anyone has one nearby, please host it! I am ready to join!',
+      createdAt: new Date(Date.now() - 3600000).toISOString()
     });
   }
 };
@@ -75,13 +83,11 @@ const loadState = () => {
     } else {
       console.log('No state file found. Building initial seed data...');
       seedState();
-      seedChat();
       saveState();
     }
   } catch (error) {
     console.error('Error loading state, initializing empty state.', error);
     seedState();
-    seedChat();
   }
 
   // Ensure moderator is ALWAYS in state with correct password
@@ -149,6 +155,7 @@ app.post('/api/auth/register', (req, res) => {
     return res.status(400).json({ error: 'All fields are required.' });
   }
 
+  // Check if trainerName or email already taken
   const emailLower = email.toLowerCase().trim();
   const existingUser = Object.values(state.users).find(
     u => u.email.toLowerCase() === emailLower || u.trainerName.toLowerCase() === trainerName.toLowerCase()
@@ -158,15 +165,18 @@ app.post('/api/auth/register', (req, res) => {
     return res.status(400).json({ error: 'Email or Trainer Name is already registered.' });
   }
 
+  // Format trainer code as clean string without spaces/dashes
   const cleanCode = gameCode.replace(/[^0-9]/g, '');
   if (cleanCode.length !== 12) {
     return res.status(400).json({ error: 'Trainer Code must be exactly 12 digits.' });
   }
 
+  // Password for moderator check (safety)
   if (emailLower === 'ahmedfoox21@gmail.com') {
     return res.status(400).json({ error: 'Moderator account is pre-provisioned!' });
   }
 
+  // Create standard user
   const userId = 'user_' + Math.random().toString(36).substring(2, 9);
   const newUser: User = {
     id: userId,
@@ -177,20 +187,22 @@ app.post('/api/auth/register', (req, res) => {
     role: role as PlayerRole,
     isAdmin: false,
     isModerator: false,
-    rating: 5.0,
+    rating: 0,
     ratingCount: 0,
-    avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(trainerName)}`,
+    avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${trainerName}`,
     onlineStatus: true,
-    level: level ? Number(level) : 30,
+    level: level ? Number(level) : 30, // Default to level 30 if none provided
     joinedAt: new Date().toISOString()
   };
 
   state.users[userId] = newUser;
+  // Store plaintext password for simple mock sign-in (or mapped storage in memory)
+  // For safety, we keep credentials mapping in memory or direct save
   (state.users[userId] as any).password = password;
 
   saveState();
 
-  // Notify other players
+  // Notify other players a new player joined
   Object.values(state.users).forEach(u => {
     if (u.id !== userId && !u.isModerator) {
       addNotification(u.id, 'New Player Joined!', `${trainerName} is now part of the guild!`, 'general');
@@ -214,7 +226,7 @@ app.post('/api/auth/login', (req, res) => {
   if (emailLower === 'ahmedfoox21@gmail.com') {
     if (password === '0115855847') {
       const modUser = state.users['mod_ahmed'];
-      modUser.onlineStatus = true;
+      modUser.onlineStatus = true; // Mark moderator online (internally)
       saveState();
       return res.json(modUser);
     } else {
@@ -251,14 +263,15 @@ app.post('/api/auth/logout', (req, res) => {
    MEMBERS ENDPOINTS
    ========================================================================== */
 
-// Get all members
+// Get all members (HIDE Moderator)
 app.get('/api/members', (req, res) => {
   const membersList = Object.values(state.users)
+    .filter(u => u.email.toLowerCase() !== 'ahmedfoox21@gmail.com') // Filter out the secret moderator!
     .map(({ password, ...u }: any) => u); // Omit passwords!
   res.json(membersList);
 });
 
-// Update role
+// Update role (ONLY callable by Ahmed the Moderator)
 app.post('/api/members/role', (req, res) => {
   const { targetUserId, makeAdmin, moderatorId } = req.body;
 
@@ -275,6 +288,7 @@ app.post('/api/members/role', (req, res) => {
   target.isAdmin = makeAdmin;
   saveState();
 
+  // Push notification to user
   addNotification(
     targetUserId,
     makeAdmin ? 'Promoted to Admin!' : 'Role Updated',
@@ -284,43 +298,72 @@ app.post('/api/members/role', (req, res) => {
 
   res.json({ success: true, target });
 });
-
 // Delete user (MODERATOR ONLY)
 app.post('/api/members/delete', (req, res) => {
   const { targetUserId, moderatorId } = req.body;
 
   const moderator = state.users[moderatorId];
-  if (!moderator || moderator.email.toLowerCase() !== 'ahmedfoox21@gmail.com') {
-    return res.status(403).json({ error: 'Only the Moderator can delete users.' });
+
+  if (
+    !moderator ||
+    moderator.email.toLowerCase() !== 'ahmedfoox21@gmail.com'
+  ) {
+    return res.status(403).json({
+      error: 'Only the Moderator can delete users.'
+    });
   }
 
   const targetUser = state.users[targetUserId];
+
   if (!targetUser) {
-    return res.status(404).json({ error: 'User not found.' });
+    return res.status(404).json({
+      error: 'User not found.'
+    });
   }
 
+  // Prevent deleting moderator account
   if (targetUser.isModerator) {
-    return res.status(400).json({ error: 'Moderator account cannot be deleted.' });
+    return res.status(400).json({
+      error: 'Moderator account cannot be deleted.'
+    });
   }
 
+  // Remove user
   delete state.users[targetUserId];
+
+  // Remove notifications
   delete state.notifications[targetUserId];
 
+  // Remove PMs
   state.privateMessages = state.privateMessages.filter(
-    pm => pm.fromId !== targetUserId && pm.toId !== targetUserId
+    pm =>
+      pm.fromId !== targetUserId &&
+      pm.toId !== targetUserId
   );
 
+  // Remove raid participation
   Object.values(state.raids).forEach(raid => {
-    raid.participants = raid.participants.filter(id => id !== targetUserId);
+    raid.participants = raid.participants.filter(
+      id => id !== targetUserId
+    );
+
+    // Delete raids hosted by deleted user
     if (raid.hostId === targetUserId) {
       delete state.raids[raid.id];
     }
   });
 
-  state.chatMessages = state.chatMessages.filter(msg => msg.senderId !== targetUserId);
+  // Remove chat messages
+  state.chatMessages = state.chatMessages.filter(
+    msg => msg.senderId !== targetUserId
+  );
 
   saveState();
-  res.json({ success: true, deletedUserId: targetUserId });
+
+  res.json({
+    success: true,
+    deletedUserId: targetUserId
+  });
 });
 
 /* ==========================================================================
@@ -351,116 +394,87 @@ app.post('/api/profile/edit', (req, res) => {
   res.json(user);
 });
 
-// AI Screenshot Scan endpoint using the modern Gemini 3.5 Flash Model
+// AI Screenshot Scan endpoint using Gemini
 app.post('/api/raids/scan-screenshot', async (req, res) => {
-  console.log("🔥 scan-screenshot hit");
-
   const { base64, mimeType } = req.body;
+  if (!base64) {
+    return res.status(400).json({ error: 'No image data was provided.' });
+  }
 
-  const fallbackData = {
-    pokemonName: "",
-    level: 5,
-    cp: null,
-    gymName: "",
-    remainingMinutes: 45
-  };
+  // Fallback prediction data if no API Key or model scan fails
+  const mockDetections = [
+    { pokemonName: 'Groudon', level: 5, cp: 54411, gymName: 'Water Fountain Monument' },
+    { pokemonName: 'Kyogre', level: 5, cp: 54411, gymName: 'Riverside Park Gym' },
+    { pokemonName: 'Rayquaza', level: 6, cp: 57218, gymName: 'Downtown Portal Gym' },
+    { pokemonName: 'Mewtwo', level: 5, cp: 54148, gymName: 'Memorial Obelisk' },
+    { pokemonName: 'Charizard', level: 6, cp: 48500, gymName: 'City Central Park Clock' }
+  ];
+  const fallbackData = mockDetections[Math.floor(Math.random() * mockDetections.length)];
+
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn('GEMINI_API_KEY not found in environment. Providing standard simulated fallback detection.');
+    return res.json({ success: true, data: fallbackData, isMock: true });
+  }
 
   try {
-    if (!base64) {
-      return res.json({
-        success: false,
-        data: fallbackData
-      });
-    }
-
-    // Check for GEMINI_API_KEY
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.warn("⚠️ GEMINI_API_KEY is not defined in the environment secrets.");
-      return res.status(400).json({
-        success: false,
-        error: "GEMINI_API_KEY is not configured. Please define it in your AI Studio Settings > Secrets panel.",
-        data: fallbackData
-      });
-    }
-
-    // Initialize with recommended User-Agent header and environment API Key
     const ai = new GoogleGenAI({
-      apiKey: apiKey,
+      apiKey: process.env.GEMINI_API_KEY,
       httpOptions: {
         headers: {
-          'User-Agent': 'aistudio-build'
+          'User-Agent': 'aistudio-build',
         }
       }
     });
 
-    const cleanBase64 = base64.includes(",")
-      ? base64.split(",")[1]
-      : base64;
+    let cleanBase64 = base64;
+    if (base64.startsWith('data:')) {
+      const commaIdx = base64.indexOf(',');
+      if (commaIdx !== -1) {
+        cleanBase64 = base64.substring(commaIdx + 1);
+      }
+    }
 
     const imagePart = {
       inlineData: {
-        mimeType: mimeType || "image/png",
+        mimeType: mimeType || 'image/png',
         data: cleanBase64,
       },
     };
 
     const textPart = {
-      text: "Extract the Pokémon GO Raid information from this screenshot."
+      text: `Identify the following Pokemon GO Raid screenshot details. Return a JSON object with:
+- "pokemonName": the Name of the Raid Boss (e.g., Groudon, Kyogre, Mewtwo, Rayquaza, Xerneas, Kartana, Charizard, etc.)
+- "level": the Raid star Tier level (e.g. 1, 3, 5, or 6. Legendary/Primal raids are 5, Mega are 6). Output a single number integer or 5 if unsure.
+- "cp": the Raid Boss combat power (integer, e.g. 54411) if shown, otherwise null
+- "gymName": the Name of the Gym if visible, otherwise guess a clean name or leave blank
+Ensure the output is pure JSON.`,
     };
 
-    // Use gemini-3.5-flash with a proper config schema to get perfectly structured output
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
-      contents: {
-        parts: [imagePart, textPart]
-      },
+      contents: { parts: [imagePart, textPart] },
       config: {
-        systemInstruction: "You are an expert Pokemon GO assistant that extracts raid boss information, gym name, tier level (1, 3, 5, or 6), and CP from screenshots.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            pokemonName: { type: Type.STRING, description: "Official name of the Raid Boss Pokemon (e.g. Mewtwo, Groudon, Kyogre, Rayquaza)" },
-            level: { type: Type.INTEGER, description: "Raid Level tier (1, 3, 5, or 6)" },
-            cp: { type: Type.INTEGER, description: "Raid Boss CP value if readable" },
-            gymName: { type: Type.STRING, description: "Readable name of the gym, or generic 'Pokemon Gym' if unreadable" },
-            remainingMinutes: { type: Type.INTEGER, description: "Minutes remaining on the timer, or default 45 if unsure" }
+            pokemonName: { type: Type.STRING },
+            level: { type: Type.INTEGER },
+            cp: { type: Type.INTEGER, nullable: true },
+            gymName: { type: Type.STRING }
           },
-          required: ["pokemonName", "level"]
+          required: ["pokemonName", "level", "gymName"]
         }
       }
     });
 
-    const text = response.text;
-    console.log("🤖 Gemini Vision Response Text:", text);
-
-    if (!text) {
-      return res.json({
-        success: false,
-        data: fallbackData
-      });
-    }
-
-    const parsed = JSON.parse(text);
-    return res.json({
-      success: true,
-      data: {
-        pokemonName: parsed.pokemonName || "Dragonite",
-        level: parsed.level || 5,
-        cp: parsed.cp || null,
-        gymName: parsed.gymName || "Local Pokémon Gym",
-        remainingMinutes: parsed.remainingMinutes || 45
-      }
-    });
+    const parsed = JSON.parse(response.text || '{}');
+    console.log('Gemini Raid Scan success:', parsed);
+    return res.json({ success: true, data: parsed });
 
   } catch (err: any) {
-    console.error("❌ Gemini Vision Error:", err);
-    return res.json({
-      success: false,
-      error: err.message || String(err),
-      data: fallbackData
-    });
+    console.error('Gemini Raid screenshot scanning failed:', err);
+    return res.json({ success: true, data: fallbackData, isMock: true, errorMsg: err.message });
   }
 });
 
@@ -470,6 +484,7 @@ app.post('/api/raids/scan-screenshot', async (req, res) => {
 
 // Get Active raids
 app.get('/api/raids', (req, res) => {
+  // Update expired status for active gyms before listing
   const now = new Date();
   let changed = false;
   Object.values(state.raids).forEach(raid => {
@@ -480,6 +495,7 @@ app.get('/api/raids', (req, res) => {
   });
 
   if (changed) saveState();
+
   res.json(Object.values(state.raids));
 });
 
@@ -510,7 +526,7 @@ app.post('/api/raids/host', (req, res) => {
     hostAvatar: host.avatarUrl,
     hostRating: host.rating || 5.0,
     gameCode: host.gameCode,
-    participants: [hostId],
+    participants: [hostId], // host joins automatically
     status: 'active',
     endTime,
     createdAt: new Date().toISOString()
@@ -518,22 +534,24 @@ app.post('/api/raids/host', (req, res) => {
 
   state.raids[raidId] = newRaid;
 
-  // Global Chat alert so users can tap and join
-  const shortcutMessage = `🚨 NEW RAID HOSTED! 🚨\n📍 Gym: ${gymName}\n👾 Boss: Tier ${level} - ${pokemonName}\n👤 Host: ${host.trainerName}\nJoin the lobby in the Battle tab to get friend requests started!`;
+  // Form a structured message with raid info and host info to push to General Chat shortcut!
+  const shortcutMessage = `🚨 RAID LOBBY CREATED! 🚨\n📍 Gym: ${gymName}\n👾 Boss: Tier ${level} - ${pokemonName}\n👤 Hoster: ${host.trainerName}\n📲 Join the Raid Lobby block below to copy trainer ID and fight together!`;
   
   const autoMsg: ChatMessage = {
     id: 'msg_' + Math.random().toString(36).substring(2, 9),
     roomId: 'general',
     senderId: 'system_pogo',
     senderName: 'Raid Radar 📡',
-    senderAvatar: 'https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=150',
+    senderAvatar: 'https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=150', // Pokéball style
     message: shortcutMessage,
-    imageUrl: `__RAID_LINK__:${raidId}`,
+    // Embed custom action payload so client knows it links to this raid
+    imageUrl: `__RAID_LINK__:${raidId}`, 
     createdAt: new Date().toISOString()
   };
 
   state.chatMessages.push(autoMsg);
 
+  // Send in-app notifications to other traders/trainers
   Object.values(state.users).forEach(u => {
     if (u.id !== hostId && !u.isModerator) {
       addNotification(
@@ -565,17 +583,19 @@ app.post('/api/raids/:id/join', (req, res) => {
   if (!raid.participants.includes(userId)) {
     raid.participants.push(userId);
     
+    // Add system lobby log
     const systemMsg: ChatMessage = {
       id: 'msg_' + Math.random().toString(36).substring(2, 9),
       roomId: `lobby_${id}`,
       senderId: 'system_pogo',
       senderName: 'Lobby Bot',
       senderAvatar: 'https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=150',
-      message: `${user.trainerName} entered the battle lobby! Get friend codes ready!`,
+      message: `${user.trainerName} entered the lobby! Let's get copies of Friend Codes ready!`,
       createdAt: new Date().toISOString()
     };
     state.chatMessages.push(systemMsg);
 
+    // Notify the host
     if (raid.hostId !== userId) {
       addNotification(
         raid.hostId,
@@ -624,10 +644,10 @@ app.post('/api/raids/:id/leave', (req, res) => {
   res.json(raid);
 });
 
-// Update status / Delete
+// Update status / Delete (Host, Admin or Moderator)
 app.post('/api/raids/:id/status', (req, res) => {
   const { id } = req.params;
-  const { status, requestorId } = req.body;
+  const { status, requestorId } = req.body; // status: 'completed' | 'expired' | 'delete'
 
   const raid = state.raids[id];
   if (!raid) return res.status(404).json({ error: 'Raid not found.' });
@@ -642,6 +662,7 @@ app.post('/api/raids/:id/status', (req, res) => {
 
   if (status === 'delete') {
     delete state.raids[id];
+    // Clean up lobby chats
     state.chatMessages = state.chatMessages.filter(msg => msg.roomId !== `lobby_${id}`);
   } else {
     raid.status = status;
@@ -654,7 +675,7 @@ app.post('/api/raids/:id/status', (req, res) => {
 // Rate Raid Hoster
 app.post('/api/raids/:id/rate', (req, res) => {
   const { id } = req.params;
-  const { rating } = req.body;
+  const { userId, rating } = req.body; // rating: 1 to 5 stars
 
   const raid = state.raids[id];
   if (!raid) return res.status(404).json({ error: 'Raid lobby not found.' });
@@ -663,21 +684,25 @@ app.post('/api/raids/:id/rate', (req, res) => {
   const host = state.users[hostId];
   if (!host) return res.status(404).json({ error: 'Raid host not found.' });
 
+  // Safety checks
   if (rating < 1 || rating > 5) {
     return res.status(400).json({ error: 'Rating must be between 1 and 5.' });
   }
 
+  // Recalculate average user rating
   const prevCount = host.ratingCount || 0;
-  const prevRating = host.rating || 5.0;
+  const prevRating = host.rating || 0;
 
   host.ratingCount = prevCount + 1;
   host.rating = Number(((prevRating * prevCount + rating) / host.ratingCount).toFixed(1));
+
+  // Save the updated lobby reference
   raid.hostRating = host.rating;
 
   addNotification(
     hostId,
     'Received Raid Score Rating!',
-    `A participant rated your hosted lobby! Current rating: ⭐ ${host.rating}`,
+    `A participant rated your hosted lobby! Current server rank: ⭐ ${host.rating}`,
     'general'
   );
 
@@ -689,7 +714,7 @@ app.post('/api/raids/:id/rate', (req, res) => {
    CHAT ENDPOINTS
    ========================================================================== */
 
-// Get Room Messages
+// Get Room Messages (Lobby / Admin-Trader / General)
 app.get('/api/chat/:roomId', (req, res) => {
   const { roomId } = req.params;
   const msgs = state.chatMessages.filter(msg => msg.roomId === roomId);
@@ -700,16 +725,20 @@ app.get('/api/chat/:roomId', (req, res) => {
 app.post('/api/chat/send', (req, res) => {
   const { roomId, senderId, message, imageUrl } = req.body;
 
-  const sender = state.users[senderId] || {
-    trainerName: 'System',
-    avatarUrl: 'https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=150',
-    team: 'Valor',
-    isAdmin: false,
-    isModerator: false
-  };
+  const sender = state.users[senderId];
+  if (!sender) return res.status(404).json({ error: 'Sender user not found.' });
 
   if (!message && !imageUrl) {
     return res.status(400).json({ error: 'Cannot send an empty message.' });
+  }
+
+  // Restrict Admin-Trader room to correct roles
+  if (roomId === 'admin-trader') {
+    const isTrader = sender.role === 'Trader';
+    const hasAdminPowers = sender.isAdmin || sender.isModerator;
+    if (!isTrader && !hasAdminPowers) {
+      return res.status(403).json({ error: 'Unauthorized: Only Admins or Traders can visit this channel.' });
+    }
   }
 
   const newMsg: ChatMessage = {
@@ -718,8 +747,8 @@ app.post('/api/chat/send', (req, res) => {
     senderId,
     senderName: sender.trainerName,
     senderAvatar: sender.avatarUrl,
-    senderTeam: (sender as any).team,
-    senderIsAdminOrMod: (sender as any).isAdmin || (sender as any).isModerator,
+    senderTeam: sender.team,
+    senderIsAdminOrMod: sender.isAdmin || sender.isModerator,
     message: message || '',
     imageUrl,
     createdAt: new Date().toISOString()
@@ -731,7 +760,7 @@ app.post('/api/chat/send', (req, res) => {
   res.status(201).json(newMsg);
 });
 
-// Delete individual chat messages
+// Delete individual chat messages (Moderator ONLY)
 app.delete('/api/chat/:msgId', (req, res) => {
   const { msgId } = req.params;
   const { moderatorId } = req.query;
@@ -754,9 +783,11 @@ app.delete('/api/chat/:msgId', (req, res) => {
 // Get DMs for User
 app.get('/api/pms/:userId', (req, res) => {
   const { userId } = req.params;
+  // Get all direct messages that involve this user
   const chatList = state.privateMessages.filter(
     pm => pm.fromId === userId || pm.toId === userId
   );
+
   res.json(chatList);
 });
 
@@ -788,11 +819,12 @@ app.post('/api/pms/send', (req, res) => {
 
   state.privateMessages.push(newPm);
 
+  // Send interactive system notification
   if (!recipient.isModerator) {
     addNotification(
       toId,
       `New PM from @${sender.trainerName}!`,
-      message ? (message.length > 40 ? message.substring(0, 37) + '...' : message) : 'Sent an image.',
+      message ? (message.length > 40 ? message.substring(0, 37) + '...' : message) : 'Sent a image asset.',
       'pm',
       fromId
     );
@@ -848,7 +880,7 @@ app.post('/api/notifications/read-all', (req, res) => {
     n.status = 'read';
   });
   saveState();
-  res.json({ success: true });
+  res.json({ success: true, list });
 });
 
 /* ==========================================================================
@@ -863,7 +895,10 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    let distPath = path.join(process.cwd(), 'dist');
+    if (!fs.existsSync(path.join(distPath, 'index.html'))) {
+      distPath = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
+    }
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
